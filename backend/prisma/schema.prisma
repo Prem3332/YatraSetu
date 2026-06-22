@@ -1,0 +1,237 @@
+// ============================================
+// PilgrimSafe — Prisma Schema
+// PostgreSQL (Railway) + Prisma ORM
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────────
+
+enum Role {
+  devotee
+  temple_admin
+  police
+  medical
+}
+
+enum Language {
+  en
+  gu
+  hi
+}
+
+enum SlotBookingStatus {
+  booked
+  serving
+  completed
+  cancelled
+}
+
+enum QueueStatus {
+  open
+  full
+  closed
+}
+
+enum AlertType {
+  stampede
+  medical
+  fire
+  sos
+  general
+}
+
+enum AlertSeverity {
+  low
+  moderate
+  critical
+}
+
+enum SensorStatus {
+  low
+  moderate
+  high
+}
+
+// ── Models ─────────────────────────────────────────────────
+
+/// Stores all users of PilgrimSafe — both devotees and staff.
+/// Devotees book darshan slots; admins/police/medical manage the temple.
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  phone          String   @unique
+  email          String?  @unique
+  passwordHash   String
+  role           Role     @default(devotee)
+  templeAssigned String?
+  temple         Temple?  @relation("AssignedStaff", fields: [templeAssigned], references: [id])
+  isAccessible   Boolean  @default(false)
+  language       Language @default(gu)
+  fcmToken       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  slots            Slot[]
+  triggeredAlerts  Alert[] @relation("TriggeredBy")
+  resolvedAlerts   Alert[] @relation("ResolvedBy")
+
+  @@map("users")
+}
+
+/// Temple metadata — one record per pilgrimage site.
+/// Referenced by Zone, Queue, Slot, Alert, Sensor.
+model Temple {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  city          String?
+  state         String?  @default("Gujarat")
+  lat           Float?
+  lng           Float?
+  totalCapacity Int?
+  timings       Json?    // [{day, open, close}] — same shape as original
+  slotConfigurations Json? // [{ startTime, endTime, capacity }]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  zones         Zone[]
+  queues        Queue[]
+  slots         Slot[]
+  alerts        Alert[]
+  sensors       Sensor[]
+  assignedStaff User[]   @relation("AssignedStaff")
+
+  @@map("temples")
+}
+
+/// Physical zone within a temple complex.
+/// Zone data feeds CrowdMonitor heatmap and TempleMapScreen.
+model Zone {
+  id           String  @id @default(cuid())
+  templeId     String
+  temple       Temple  @relation(fields: [templeId], references: [id], onDelete: Cascade)
+  zoneId       String  // "entry", "shrine", "prasad", etc.
+  label        String
+  capacity     Int
+  coordinateX  Float?
+  coordinateY  Float?
+  coordinateW  Float?
+  coordinateH  Float?
+  latLngLat    Float?
+  latLngLng    Float?
+  isAccessible Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  sensors Sensor[]
+
+  @@unique([templeId, zoneId])
+  @@map("zones")
+}
+
+/// One time slot at one temple on one day.
+/// Holds capacity + booking counts for that slot.
+model Queue {
+  id             String      @id @default(cuid())
+  templeId       String
+  temple         Temple      @relation(fields: [templeId], references: [id], onDelete: Cascade)
+  date           DateTime    @db.Date
+  timeSlot       String
+  totalCapacity  Int
+  bookedCount    Int         @default(0)
+  availableSpots Int?
+  status         QueueStatus @default(open)
+  currentToken   Int         @default(0)
+  estimatedWait  Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relations
+  slots Slot[]
+
+  @@unique([templeId, date, timeSlot])
+  @@index([templeId])
+  @@map("queues")
+}
+
+/// Individual booking made by a devotee.
+/// Links a User to a Queue with a unique token number.
+model Slot {
+  id           String            @id @default(cuid())
+  userId       String
+  user         User              @relation(fields: [userId], references: [id])
+  queueId      String
+  queue        Queue             @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  templeId     String
+  temple       Temple            @relation(fields: [templeId], references: [id])
+  tokenNumber  Int
+  peopleCount  Int               @default(1)
+  isAccessible Boolean           @default(false)
+  status       SlotBookingStatus @default(booked)
+  bookingTime  DateTime          @default(now())
+  slotDate     DateTime          @db.Date
+  slotTime     String
+  notified     Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([userId, slotDate])
+  @@index([queueId, status, tokenNumber])
+  @@map("slots")
+}
+
+/// Emergency alerts triggered by temple admins or SOS from devotees.
+model Alert {
+  id               String        @id @default(cuid())
+  templeId         String
+  temple           Temple        @relation(fields: [templeId], references: [id], onDelete: Cascade)
+  triggeredById    String
+  triggeredBy      User          @relation("TriggeredBy", fields: [triggeredById], references: [id])
+  type             AlertType
+  severity         AlertSeverity @default(moderate)
+  message          String
+  affectedZone     String?
+  isActive         Boolean       @default(true)
+  resolvedAt       DateTime?
+  resolvedById     String?
+  resolvedBy       User?         @relation("ResolvedBy", fields: [resolvedById], references: [id])
+  nearestAidPoints Json?         // JSONB — [{name, lat, lng}]
+  exitRoutes       Json?         // JSONB — [{name, coordinates}]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([templeId, isActive])
+  @@map("alerts")
+}
+
+/// IoT sensor readings for crowd density monitoring.
+/// Feeds CrowdMonitor heatmap and HomeScreen crowd bars.
+model Sensor {
+  id           String       @id @default(cuid())
+  templeId     String
+  temple       Temple       @relation(fields: [templeId], references: [id], onDelete: Cascade)
+  zoneId       String
+  zone         Zone         @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  currentCount Int
+  density      Float
+  status       SensorStatus
+  timestamp    DateTime     @default(now())
+  isSynthetic  Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([zoneId, timestamp])
+  @@index([templeId, zoneId, timestamp])
+  @@map("sensors")
+}

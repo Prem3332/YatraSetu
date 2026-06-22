@@ -1,0 +1,494 @@
+{
+  "info": {
+    "name": "PilgrimSafe API",
+    "description": "Complete API specification for PilgrimSafe — Gujarat Pilgrimage Crowd Management System.\n\nEndpoints cover: Auth, Queue Booking, Sensor/Crowd Data, Emergency Alerts, ML Predictions, and Admin Analytics.\n\nBase URL: {{baseUrl}} (default: http://localhost:5000)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "templeId", "value": "", "type": "string" },
+    { "key": "slotId", "value": "", "type": "string" },
+    { "key": "alertId", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "description": "User registration, login, profile, and logout",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ramesh Patel\",\n  \"phone\": \"+91 98765 43210\",\n  \"email\": \"ramesh@example.com\",\n  \"password\": \"Test@1234\",\n  \"role\": \"devotee\",\n  \"isAccessible\": false,\n  \"language\": \"gu\"\n}"
+            },
+            "description": "Register a new user. Roles: devotee, temple_admin, police, medical.\n\nReturns: user object + JWT token."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"token\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"user\": {\n    \"_id\": \"6789abcdef012345\",\n    \"name\": \"Ramesh Patel\",\n    \"phone\": \"+91 98765 43210\",\n    \"role\": \"devotee\",\n    \"isAccessible\": false,\n    \"language\": \"gu\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+91 98765 43210\",\n  \"password\": \"Test@1234\"\n}"
+            },
+            "description": "Login with phone + password. Returns JWT token.\n\nStore the token in the {{token}} collection variable for subsequent requests."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"token\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"user\": {\n    \"_id\": \"6789abcdef012345\",\n    \"name\": \"Ramesh Patel\",\n    \"role\": \"devotee\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] },
+            "description": "Get profile of the currently authenticated user.\n\nRequires: JWT token in Authorization header."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"user\": {\n    \"_id\": \"6789abcdef012345\",\n    \"name\": \"Ramesh Patel\",\n    \"phone\": \"+91 98765 43210\",\n    \"email\": \"ramesh@example.com\",\n    \"role\": \"devotee\",\n    \"isAccessible\": false,\n    \"language\": \"gu\",\n    \"createdAt\": \"2024-01-10T08:30:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] },
+            "description": "Invalidate the current JWT token (server-side blacklist or Redis)."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Logged out successfully\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Queue",
+      "description": "Darshan slot booking, availability, live status, and cancellation",
+      "item": [
+        {
+          "name": "Book Slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/queue/book-slot", "host": ["{{baseUrl}}"], "path": ["api", "queue", "book-slot"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templeId\": \"{{templeId}}\",\n  \"slotDate\": \"2024-01-15\",\n  \"slotTime\": \"6:00 AM\",\n  \"peopleCount\": 2,\n  \"isAccessible\": false\n}"
+            },
+            "description": "Book a darshan slot for the authenticated devotee.\n\nMaps to QueueBookingScreen.tsx → Confirm Booking button.\n\nReturns: assigned tokenNumber and booking details."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"booking\": {\n    \"_id\": \"slot_object_id\",\n    \"tokenNumber\": 247,\n    \"templeId\": \"temple_object_id\",\n    \"slotDate\": \"2024-01-15\",\n    \"slotTime\": \"6:00 AM\",\n    \"peopleCount\": 2,\n    \"isAccessible\": false,\n    \"status\": \"booked\"\n  },\n  \"message\": \"Slot booked successfully. Your token is #A247.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Queue Status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/queue/status/{{templeId}}", "host": ["{{baseUrl}}"], "path": ["api", "queue", "status", "{{templeId}}"] },
+            "description": "Live queue status for a temple (today's slots).\n\nFeeds LiveQueueScreen.tsx: currentToken, estimatedWait, queue feed."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"templeId\": \"temple_object_id\",\n  \"currentToken\": 247,\n  \"estimatedWait\": 25,\n  \"bookedCount\": 38,\n  \"totalCapacity\": 76,\n  \"availableSpots\": 38,\n  \"recentTokens\": [\n    { \"token\": \"A244\", \"status\": \"called\" },\n    { \"token\": \"A245\", \"status\": \"called\" },\n    { \"token\": \"A246\", \"status\": \"called\" },\n    { \"token\": \"A247\", \"status\": \"you\" },\n    { \"token\": \"A248\", \"status\": \"waiting\" },\n    { \"token\": \"A249\", \"status\": \"waiting\" },\n    { \"token\": \"A250\", \"status\": \"waiting\" }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "My Bookings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/queue/my-bookings", "host": ["{{baseUrl}}"], "path": ["api", "queue", "my-bookings"] },
+            "description": "Get all upcoming bookings for the authenticated devotee."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"bookings\": [\n    {\n      \"_id\": \"slot_id\",\n      \"tokenNumber\": 247,\n      \"temple\": { \"name\": \"Somnath Temple\", \"slug\": \"somnath\" },\n      \"slotDate\": \"2024-01-15\",\n      \"slotTime\": \"6:00 AM\",\n      \"peopleCount\": 2,\n      \"status\": \"booked\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel Slot",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/queue/cancel-slot/{{slotId}}", "host": ["{{baseUrl}}"], "path": ["api", "queue", "cancel-slot", "{{slotId}}"] },
+            "description": "Cancel a booking. Maps to LiveQueueScreen.tsx 'Cancel Slot' button."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Booking cancelled successfully\",\n  \"slot\": { \"_id\": \"slot_id\", \"status\": \"cancelled\" }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Availability",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/queue/availability/{{templeId}}", "host": ["{{baseUrl}}"], "path": ["api", "queue", "availability", "{{templeId}}"] },
+            "description": "Available slots for the next 7 days at a temple.\n\nFeeds QueueBookingScreen.tsx date picker + time slot grid."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"templeId\": \"temple_object_id\",\n  \"availability\": [\n    {\n      \"date\": \"2024-01-15\",\n      \"slots\": {\n        \"Morning\": [\n          { \"time\": \"6:00 AM\", \"spots\": 8, \"status\": \"open\" },\n          { \"time\": \"7:00 AM\", \"spots\": 0, \"status\": \"full\" },\n          { \"time\": \"8:00 AM\", \"spots\": 32, \"status\": \"open\" }\n        ],\n        \"Afternoon\": [\n          { \"time\": \"12:00 PM\", \"spots\": 44, \"status\": \"open\" },\n          { \"time\": \"1:00 PM\", \"spots\": 28, \"status\": \"open\" }\n        ],\n        \"Evening\": [\n          { \"time\": \"5:00 PM\", \"spots\": 0, \"status\": \"full\" },\n          { \"time\": \"6:00 PM\", \"spots\": 12, \"status\": \"open\" }\n        ]\n      }\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sensor / Crowd",
+      "description": "IoT sensor data for crowd density monitoring",
+      "item": [
+        {
+          "name": "Get Latest Sensor Data",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/sensor/data/{{templeId}}", "host": ["{{baseUrl}}"], "path": ["api", "sensor", "data", "{{templeId}}"] },
+            "description": "Latest sensor reading for all zones of a temple.\n\nDirectly feeds CrowdMonitor.tsx zone heatmap and HomeScreen.tsx crowd density bar."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"templeId\": \"temple_object_id\",\n  \"timestamp\": \"2024-01-15T10:30:00Z\",\n  \"zones\": [\n    { \"zoneId\": \"entry\", \"label\": \"Entry Gate\", \"currentCount\": 56, \"capacity\": 200, \"density\": 28, \"status\": \"low\" },\n    { \"zoneId\": \"shrine\", \"label\": \"Main Shrine\", \"currentCount\": 320, \"capacity\": 500, \"density\": 64, \"status\": \"moderate\" },\n    { \"zoneId\": \"prasad\", \"label\": \"Prasad Counter\", \"currentCount\": 134, \"capacity\": 150, \"density\": 89, \"status\": \"high\" },\n    { \"zoneId\": \"corridor1\", \"label\": \"East Corridor\", \"currentCount\": 174, \"capacity\": 300, \"density\": 58, \"status\": \"moderate\" },\n    { \"zoneId\": \"restroom\", \"label\": \"Restrooms\", \"currentCount\": 16, \"capacity\": 80, \"density\": 20, \"status\": \"low\" },\n    { \"zoneId\": \"parking\", \"label\": \"Parking Zone\", \"currentCount\": 312, \"capacity\": 400, \"density\": 78, \"status\": \"moderate\" },\n    { \"zoneId\": \"firstaid\", \"label\": \"First Aid Post\", \"currentCount\": 3, \"capacity\": 30, \"density\": 10, \"status\": \"low\" }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Push Sensor Reading (Internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/sensor/update", "host": ["{{baseUrl}}"], "path": ["api", "sensor", "update"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templeId\": \"{{templeId}}\",\n  \"zoneId\": \"shrine\",\n  \"currentCount\": 340,\n  \"density\": 68,\n  \"status\": \"moderate\",\n  \"isSynthetic\": true\n}"
+            },
+            "description": "Internal endpoint used by the cron job / IoT simulator to push new sensor readings.\n\nNot called by frontend — called by Node.js scheduler."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"reading\": {\n    \"_id\": \"sensor_id\",\n    \"templeId\": \"temple_id\",\n    \"zoneId\": \"shrine\",\n    \"currentCount\": 340,\n    \"density\": 68,\n    \"status\": \"moderate\",\n    \"timestamp\": \"2024-01-15T10:30:15Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Sensor History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/sensor/history/{{templeId}}", "host": ["{{baseUrl}}"], "path": ["api", "sensor", "history", "{{templeId}}"] },
+            "description": "Last 12 hours of aggregated zone data.\n\nFeeds CrowdMonitor.tsx 'Live Crowd Count — Last 6 Hours' area chart."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"templeId\": \"temple_id\",\n  \"history\": [\n    { \"time\": \"9 AM\", \"count\": 1200 },\n    { \"time\": \"10 AM\", \"count\": 2400 },\n    { \"time\": \"11 AM\", \"count\": 3800 },\n    { \"time\": \"12 PM\", \"count\": 5200 },\n    { \"time\": \"1 PM\", \"count\": 7100 },\n    { \"time\": \"2 PM\", \"count\": 8900 },\n    { \"time\": \"3 PM\", \"count\": 10200 },\n    { \"time\": \"4 PM\", \"count\": 11800 },\n    { \"time\": \"Now\", \"count\": 12450 }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Alert",
+      "description": "Emergency alert management — trigger, broadcast, resolve, SOS",
+      "item": [
+        {
+          "name": "Trigger Alert (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/alert/trigger", "host": ["{{baseUrl}}"], "path": ["api", "alert", "trigger"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templeId\": \"{{templeId}}\",\n  \"type\": \"stampede\",\n  \"severity\": \"critical\",\n  \"message\": \"Stampede risk at Main Shrine. Please evacuate via Gate 3 immediately.\",\n  \"affectedZone\": \"Main Shrine\"\n}"
+            },
+            "description": "Admin triggers an emergency alert.\n\nMaps to EmergencyPanel.tsx → alert trigger grid → confirm modal → 'Broadcast Alert' button.\n\nRequires: temple_admin role."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"alert\": {\n    \"_id\": \"alert_id\",\n    \"type\": \"stampede\",\n    \"severity\": \"critical\",\n    \"message\": \"Stampede risk at Main Shrine. Please evacuate via Gate 3 immediately.\",\n    \"affectedZone\": \"Main Shrine\",\n    \"isActive\": true,\n    \"createdAt\": \"2024-01-15T14:34:00Z\"\n  },\n  \"message\": \"Alert triggered and broadcast to 12,450 devotees\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Broadcast Alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/alert/broadcast", "host": ["{{baseUrl}}"], "path": ["api", "alert", "broadcast"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templeId\": \"{{templeId}}\",\n  \"message\": \"Due to heavy crowd, please use Gate 2 (North Exit) for departure. Gate 1 is temporarily closed.\"\n}"
+            },
+            "description": "Broadcast a custom message to all connected devotees via Socket.io + SMS.\n\nMaps to EmergencyPanel.tsx → 'Broadcast Message to All Devotees' textarea + send button."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Broadcast sent to 12,450 registered devotees\",\n  \"broadcastId\": \"broadcast_id\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Active Alerts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/alert/active/{{templeId}}", "host": ["{{baseUrl}}"], "path": ["api", "alert", "active", "{{templeId}}"] },
+            "description": "Get all active (unresolved) alerts for a temple.\n\nFeeds EmergencyPanel.tsx alert history list and EmergencyAlertScreen.tsx on the devotee side."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"alerts\": [\n    {\n      \"_id\": \"alert_id_1\",\n      \"type\": \"stampede\",\n      \"severity\": \"critical\",\n      \"message\": \"Stampede risk at Main Shrine.\",\n      \"affectedZone\": \"Main Shrine — Gate 1\",\n      \"isActive\": true,\n      \"createdAt\": \"2024-01-15T14:34:00Z\",\n      \"triggeredBy\": { \"name\": \"Suresh Kumar\", \"role\": \"temple_admin\" }\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Resolve Alert (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/alert/resolve/{{alertId}}", "host": ["{{baseUrl}}"], "path": ["api", "alert", "resolve", "{{alertId}}"] },
+            "description": "Mark an active alert as resolved.\n\nMaps to EmergencyPanel.tsx → 'Resolve' button on each active alert card."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"alert\": {\n    \"_id\": \"alert_id\",\n    \"isActive\": false,\n    \"resolvedAt\": \"2024-01-15T15:00:00Z\",\n    \"status\": \"Resolved\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Send SOS (Devotee)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/alert/sos", "host": ["{{baseUrl}}"], "path": ["api", "alert", "sos"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templeId\": \"{{templeId}}\",\n  \"message\": \"I need help — medical emergency\",\n  \"location\": {\n    \"lat\": 20.8880,\n    \"lng\": 70.4012\n  }\n}"
+            },
+            "description": "Devotee sends an SOS emergency signal.\n\nMaps to EmergencyAlertScreen.tsx → '🆘 I Need Help — SOS' button and the floating SOS button on HomeScreen."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"message\": \"SOS received. Emergency services have been notified.\",\n  \"alert\": {\n    \"_id\": \"sos_alert_id\",\n    \"type\": \"sos\",\n    \"severity\": \"critical\",\n    \"isActive\": true\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ML Prediction",
+      "description": "Crowd prediction and surge risk forecasting",
+      "item": [
+        {
+          "name": "Predict Crowd (7-day forecast)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/predict/crowd", "host": ["{{baseUrl}}"], "path": ["api", "predict", "crowd"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templeId\": \"somnath\",\n  \"startDate\": \"2024-01-15\",\n  \"days\": 7\n}"
+            },
+            "description": "Get a 7-day crowd forecast for a temple.\n\nUses the trained ML model on historical footfall data."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"temple\": \"Somnath\",\n  \"forecast\": [\n    { \"date\": \"2024-01-15\", \"predictedCount\": 12400, \"surgeFlag\": false, \"confidence\": 0.87 },\n    { \"date\": \"2024-01-16\", \"predictedCount\": 28900, \"surgeFlag\": true, \"confidence\": 0.91 },\n    { \"date\": \"2024-01-17\", \"predictedCount\": 9800, \"surgeFlag\": false, \"confidence\": 0.84 },\n    { \"date\": \"2024-01-18\", \"predictedCount\": 11200, \"surgeFlag\": false, \"confidence\": 0.86 },\n    { \"date\": \"2024-01-19\", \"predictedCount\": 15600, \"surgeFlag\": true, \"confidence\": 0.89 },\n    { \"date\": \"2024-01-20\", \"predictedCount\": 18200, \"surgeFlag\": true, \"confidence\": 0.92 },\n    { \"date\": \"2024-01-21\", \"predictedCount\": 14100, \"surgeFlag\": false, \"confidence\": 0.85 }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Surge Flag (Today)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/predict/surge-flag/{{templeId}}", "host": ["{{baseUrl}}"], "path": ["api", "predict", "surge-flag", "{{templeId}}"] },
+            "description": "Quick check: is today a surge risk day for this temple?\n\nReturns true/false with predicted count."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"temple\": \"Somnath\",\n  \"date\": \"2024-01-15\",\n  \"surgeFlag\": false,\n  \"predictedCount\": 12400,\n  \"confidence\": 0.87\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin Analytics",
+      "description": "Historical analytics, footfall reports, and data export",
+      "item": [
+        {
+          "name": "Get Footfall Analytics",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/footfall/{{templeId}}?period=weekly",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "footfall", "{{templeId}}"],
+              "query": [{ "key": "period", "value": "weekly", "description": "weekly | monthly | yearly" }]
+            },
+            "description": "Get aggregated footfall data for a temple.\n\nFeeds CrowdMonitor.tsx area chart and admin reporting."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"temple\": \"Somnath\",\n  \"period\": \"weekly\",\n  \"data\": [\n    { \"date\": \"2024-01-08\", \"footfall\": 72400 },\n    { \"date\": \"2024-01-15\", \"footfall\": 85200 }\n  ],\n  \"totalVisitors\": 157600,\n  \"avgDaily\": 11257\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Peak Days",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/analytics/peak-days/{{templeId}}", "host": ["{{baseUrl}}"], "path": ["api", "analytics", "peak-days", "{{templeId}}"] },
+            "description": "Top 10 highest-footfall days historically for a temple."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"temple\": \"Somnath\",\n  \"peakDays\": [\n    { \"date\": \"2023-10-15\", \"footfall\": 48200, \"festival\": \"Navratri Day 1\" },\n    { \"date\": \"2023-02-18\", \"footfall\": 35600, \"festival\": \"Mahashivratri\" },\n    { \"date\": \"2023-10-24\", \"footfall\": 32100, \"festival\": \"Navratri Day 9\" },\n    { \"date\": \"2023-11-12\", \"footfall\": 29800, \"festival\": \"Diwali\" },\n    { \"date\": \"2023-01-14\", \"footfall\": 27500, \"festival\": \"Uttarayan\" }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Export Report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/export/{{templeId}}?format=csv&from=2024-01-01&to=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "export", "{{templeId}}"],
+              "query": [
+                { "key": "format", "value": "csv", "description": "csv | json" },
+                { "key": "from", "value": "2024-01-01" },
+                { "key": "to", "value": "2024-01-31" }
+              ]
+            },
+            "description": "Export footfall report as CSV or JSON for a date range."
+          },
+          "response": [
+            {
+              "name": "Success (JSON format)",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"temple\": \"Somnath\",\n  \"from\": \"2024-01-01\",\n  \"to\": \"2024-01-31\",\n  \"format\": \"csv\",\n  \"downloadUrl\": \"/exports/somnath_jan2024.csv\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
