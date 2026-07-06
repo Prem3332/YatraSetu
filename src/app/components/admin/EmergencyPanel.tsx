@@ -36,6 +36,8 @@ export function EmergencyPanel() {
   const [broadcastMsg, setBroadcastMsg] = useState("");
   const [broadcast, setBroadcast] = useState(false);
 
+  // TODO: Filter emergency data by selectedTemple._id — import useTemple and use selectedTemple._id for API calls
+
   const confirmAlert = confirmModal ? alertTypes.find((a) => a.id === confirmModal) : null;
 
   const triggerAlert = () => {

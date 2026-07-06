@@ -67,6 +67,8 @@ enum SensorStatus {
 model User {
   id             String   @id @default(cuid())
   name           String
+  gender         String?
+  age            Int?
   phone          String   @unique
   email          String?  @unique
   passwordHash   String
@@ -78,6 +80,10 @@ model User {
   fcmToken       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  isVerified     Boolean  @default(false)
+  otpHash        String?
+  otpExpires     DateTime?
+  otpAttempts    Int      @default(0)
 
   // Relations
   slots            Slot[]
@@ -174,7 +180,7 @@ model Slot {
   queueId      String
   queue        Queue             @relation(fields: [queueId], references: [id], onDelete: Cascade)
   templeId     String
-  temple       Temple            @relation(fields: [templeId], references: [id])
+  temple       Temple            @relation(fields: [templeId], references: [id], onDelete: Cascade)
   tokenNumber  Int
   peopleCount  Int               @default(1)
   isAccessible Boolean           @default(false)
@@ -234,4 +240,16 @@ model Sensor {
   @@index([zoneId, timestamp])
   @@index([templeId, zoneId, timestamp])
   @@map("sensors")
+}
+
+/// Global application settings (singleton row, id = "global").
+/// Used for maintenance mode and other system-wide flags.
+model SystemSetting {
+  id                  String    @id @default("global")
+  maintenanceMode     Boolean   @default(false)
+  maintenanceMessage  String    @default("We are performing scheduled maintenance.")
+  estimatedCompletion DateTime?
+  updatedAt           DateTime  @updatedAt
+
+  @@map("system_settings")
 }

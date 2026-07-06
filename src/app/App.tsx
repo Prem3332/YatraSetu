@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route } from "react-router";
 import { Shield, Smartphone, Monitor, Menu, X } from "lucide-react";
 import { LanguageProvider, useLanguage } from "./context/LanguageContext";
+import { TempleProvider } from "./context/TempleContext";
 
 import { HomeScreen } from "./components/pilgrim/HomeScreen";
 import { QueueBookingScreen } from "./components/pilgrim/QueueBookingScreen";
@@ -13,13 +15,28 @@ import { CrowdMonitor } from "./components/admin/CrowdMonitor";
 import { QueueControl } from "./components/admin/QueueControl";
 import { EmergencyPanel } from "./components/admin/EmergencyPanel";
 import { TempleManager } from "./components/admin/TempleManager";
+import { AdminSettings } from "./components/admin/AdminSettings";
+import { MaintenanceScreen } from "./components/pilgrim/MaintenanceScreen";
+import { SignupScreen } from "./components/pilgrim/SignupScreen";
+import { LoginScreen } from "./components/pilgrim/LoginScreen";
+import { VerifyEmailScreen } from "./components/pilgrim/VerifyEmailScreen";
+import { ProfileScreen } from "./components/pilgrim/ProfileScreen";
+import { Toaster } from "./components/ui/sonner";
+import { fetchSystemSettings, fetchCurrentUser } from "./lib/api";
 
 type AppMode = "devotee" | "admin";
 type DevoteeScreen = "home" | "queue" | "live" | "map" | "emergency" | "alerts" | "profile";
-type AdminScreen = "crowd" | "queuecontrol" | "emergency" | "temples";
+type AdminScreen = "crowd" | "queuecontrol" | "emergency" | "temples" | "traffic" | "reports" | "settings";
 
 export function AppContent() {
-  const [mode, setMode] = useState<AppMode>("devotee");
+  const [mode, setMode] = useState<AppMode>(() => {
+    const saved = localStorage.getItem("yatrasetu_app_mode");
+    return (saved === "admin" || saved === "devotee") ? saved : "devotee";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("yatrasetu_app_mode", mode);
+  }, [mode]);
   const [devoteeScreen, setDevoteeScreen] = useState<DevoteeScreen>("home");
   const { t } = useLanguage();
   const [adminScreen, setAdminScreen] = useState<AdminScreen>("crowd");
@@ -27,11 +44,92 @@ export function AppContent() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const [estimatedCompletion, setEstimatedCompletion] = useState<string | null>(null);
+
+  // ── Auth state for role-based access ──────────────────────
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const isAdmin = userRole === "temple_admin";
+
+  useEffect(() => {
+    const token = localStorage.getItem("yatrasetu_token");
+    if (token) {
+      fetchCurrentUser()
+        .then((u) => setUserRole(u.role))
+        .catch(() => setUserRole(null));
+    }
+  }, []);
+
+  // If a non-admin somehow ends up in admin mode, force them back ONLY after role is known
+  useEffect(() => {
+    // Wait until userRole has been resolved (null means still loading)
+    if (userRole !== null && mode === "admin" && !isAdmin) {
+      setMode("devotee");
+    }
+  }, [mode, isAdmin, userRole]);
+
+  const loadSettings = async () => {
+    try {
+      const settings = await fetchSystemSettings();
+      setMaintenanceMode(settings.maintenanceMode);
+      setMaintenanceMessage(settings.maintenanceMessage);
+      setEstimatedCompletion(settings.estimatedCompletion);
+    } catch (err) {
+      console.error("Failed to load system settings", err);
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (mode === "devotee") {
+      switch (devoteeScreen) {
+        case "home":
+          document.title = "YatraSetu - Home";
+          break;
+        case "queue":
+          document.title = "YatraSetu - Queue Booking";
+          break;
+        case "live":
+          document.title = "YatraSetu - Live Queue";
+          break;
+        case "map":
+          document.title = "YatraSetu - Temple Map";
+          break;
+        case "emergency":
+          document.title = "YatraSetu - Emergency Alerts";
+          break;
+        default:
+          document.title = "YatraSetu";
+      }
+    } else {
+      switch (adminScreen) {
+        case "crowd":
+          document.title = "YatraSetu - Admin Dashboard";
+          break;
+        case "queuecontrol":
+          document.title = "YatraSetu - Queue Control";
+          break;
+        case "temples":
+          document.title = "YatraSetu - Manage Temples";
+          break;
+        case "emergency":
+          document.title = "YatraSetu - Emergency Panel";
+          break;
+        default:
+          document.title = "YatraSetu - Admin Dashboard";
+      }
+    }
+  }, [mode, devoteeScreen, adminScreen]);
 
   const handleDevoteeNav = (screen: string) => {
     setDevoteeScreen(screen as DevoteeScreen);
@@ -79,7 +177,8 @@ export function AppContent() {
           </div>
         </div>
 
-        {/* Mode toggle - hidden on very small screens, or we can keep it */}
+        {/* Mode toggle - only show if user is an admin */}
+        {isAdmin && (
         <div style={{ display: isMobile ? "none" : "flex", alignItems: "center", borderRadius: "12px", padding: "4px", background: "rgba(255,255,255,0.08)" }}>
           {(["devotee", "admin"] as AppMode[]).map((m) => (
             <button
@@ -106,6 +205,7 @@ export function AppContent() {
             </button>
           ))}
         </div>
+        )}
 
         {/* Screen picker */}
         {!isMobile ? (
@@ -172,7 +272,8 @@ export function AppContent() {
                 display: "flex", flexDirection: "column", gap: "8px", minWidth: "200px",
                 border: "1px solid rgba(255,255,255,0.1)"
               }}>
-                {/* Mode toggle for mobile inside menu */}
+                {/* Mode toggle for mobile inside menu — only for admins */}
+                {isAdmin && (
                 <div style={{ display: "flex", borderRadius: "8px", padding: "4px", background: "rgba(255,255,255,0.08)", marginBottom: "8px" }}>
                   {(["devotee", "admin"] as AppMode[]).map((m) => (
                     <button
@@ -192,6 +293,7 @@ export function AppContent() {
                     </button>
                   ))}
                 </div>
+                )}
 
                 {mode === "devotee"
                   ? currentDevoteeScreens.map(([id, label]) => (
@@ -236,27 +338,38 @@ export function AppContent() {
       >
         {mode === "devotee" ? (
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: "#F5F0E6" }}>
-            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative" }}>
-              {devoteeScreen === "home" && <HomeScreen onNavigate={handleDevoteeNav} />}
-              {devoteeScreen === "queue" && (
-                <QueueBookingScreen
-                  onBack={() => setDevoteeScreen("home")}
-                  onConfirm={() => setDevoteeScreen("live")}
-                />
-              )}
+            {maintenanceMode ? (
+              <MaintenanceScreen
+                message={maintenanceMessage}
+                estimatedCompletion={estimatedCompletion}
+                onRefresh={loadSettings}
+              />
+            ) : (
+              <>
+                <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative" }}>
+                  {devoteeScreen === "home" && <HomeScreen onNavigate={handleDevoteeNav} />}
+                  {devoteeScreen === "queue" && (
+                    <QueueBookingScreen
+                      onBack={() => setDevoteeScreen("home")}
+                      onConfirm={() => setDevoteeScreen("live")}
+                    />
+                  )}
               {devoteeScreen === "live" && <LiveQueueScreen onBack={() => setDevoteeScreen("home")} />}
               {devoteeScreen === "map" && <TempleMapScreen onBack={() => setDevoteeScreen("home")} />}
-              {devoteeScreen === "emergency" && (
-                <EmergencyAlertScreen onBack={() => setDevoteeScreen("home")} />
-              )}
-            </div>
-            {devoteeScreen !== "emergency" && devoteeScreen !== "map" && (
-              <div style={{ flexShrink: 0, background: "#fff" }}>
-                <BottomNav
-                  active={devoteeScreen === "queue" || devoteeScreen === "live" ? "queue" : devoteeScreen}
-                  onChange={handleDevoteeNav}
-                />
-              </div>
+                  {devoteeScreen === "emergency" && (
+                    <EmergencyAlertScreen onBack={() => setDevoteeScreen("home")} />
+                  )}
+                  {devoteeScreen === "profile" && <ProfileScreen onBack={() => setDevoteeScreen("home")} />}
+                </div>
+                {devoteeScreen !== "emergency" && devoteeScreen !== "map" && devoteeScreen !== "profile" && (
+                  <div style={{ flexShrink: 0, background: "#fff" }}>
+                    <BottomNav
+                      active={devoteeScreen === "queue" || devoteeScreen === "live" ? "queue" : devoteeScreen}
+                      onChange={handleDevoteeNav}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
@@ -277,6 +390,12 @@ export function AppContent() {
               {adminScreen === "queuecontrol" && <QueueControl />}
               {adminScreen === "temples" && <TempleManager />}
               {adminScreen === "emergency" && <EmergencyPanel />}
+              {adminScreen === "settings" && <AdminSettings />}
+              {(adminScreen === "traffic" || adminScreen === "reports") && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "rgba(255,255,255,0.5)", fontFamily: "Poppins, sans-serif" }}>
+                  <p>Coming Soon</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -287,8 +406,18 @@ export function AppContent() {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <AppContent />
-    </LanguageProvider>
+    <BrowserRouter>
+      <LanguageProvider>
+        <TempleProvider>
+          <Routes>
+            <Route path="/signup" element={<SignupScreen />} />
+            <Route path="/verify-email" element={<VerifyEmailScreen />} />
+            <Route path="/login" element={<LoginScreen />} />
+            <Route path="/*" element={<AppContent />} />
+          </Routes>
+          <Toaster position="top-center" richColors closeButton />
+        </TempleProvider>
+      </LanguageProvider>
+    </BrowserRouter>
   );
 }

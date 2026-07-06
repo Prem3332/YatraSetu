@@ -15,9 +15,10 @@ app.use(express.json());
 // ── Routes ─────────────────────────────────────────────────
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/temples", require("./routes/temples"));
+app.use("/api/queues",  require("./routes/queues"));
+app.use("/api/system",  require("./routes/system"));
 
 // TODO: Mount future route modules
-// app.use("/api/queues",  require("./routes/queues"));
 // app.use("/api/slots",   require("./routes/slots"));
 // app.use("/api/alerts",  require("./routes/alerts"));
 // app.use("/api/sensors", require("./routes/sensors"));

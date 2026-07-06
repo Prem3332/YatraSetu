@@ -1,4 +1,7 @@
+import { useState, useEffect } from "react";
 import { LayoutDashboard, Users, Bell, BarChart2, FileText, Settings, Shield, LogOut, Building2 } from "lucide-react";
+import { useTemple } from "../../context/TempleContext";
+import { fetchCurrentUser, UserProfile } from "../../lib/api";
 
 const navItems = [
   { id: "crowd", label: "Dashboard", icon: LayoutDashboard },
@@ -16,6 +19,18 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ active, onChange }: AdminSidebarProps) {
+  const { selectedTemple } = useTemple();
+  const [adminUser, setAdminUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    fetchCurrentUser()
+      .then(user => setAdminUser(user))
+      .catch(err => console.error("Failed to load admin profile:", err));
+  }, []);
+
+  const adminName = adminUser?.name || "System Admin";
+  const adminInitials = adminName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
+
   return (
     <div
       className="flex flex-col"
@@ -39,7 +54,9 @@ export function AdminSidebar({ active, onChange }: AdminSidebarProps) {
         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 6px 0", fontFamily: "Poppins, sans-serif" }}>Current Temple</p>
         <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.08)" }}>
           <span style={{ fontSize: "14px" }}>🛕</span>
-          <span style={{ color: "#fff", fontSize: "12px", fontWeight: 600, fontFamily: "Poppins, sans-serif" }}>Somnath Temple</span>
+          <span style={{ color: "#fff", fontSize: "12px", fontWeight: 600, fontFamily: "Poppins, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {selectedTemple?.name ?? "No Temple Selected"}
+          </span>
         </div>
       </div>
 
@@ -84,13 +101,18 @@ export function AdminSidebar({ active, onChange }: AdminSidebarProps) {
       <div className="px-4 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#C84B31", fontSize: "12px", fontWeight: 700, color: "#fff", fontFamily: "Poppins, sans-serif" }}>
-            SK
+            {adminInitials}
           </div>
           <div className="flex-1 min-w-0">
-            <p style={{ color: "#fff", fontSize: "12px", fontWeight: 600, margin: 0, fontFamily: "Poppins, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Suresh Kumar</p>
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", margin: 0, fontFamily: "Poppins, sans-serif" }}>Temple Admin</p>
+            <p style={{ color: "#fff", fontSize: "12px", fontWeight: 600, margin: 0, fontFamily: "Poppins, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{adminName}</p>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", margin: 0, fontFamily: "Poppins, sans-serif" }}>
+              {adminUser?.role === "temple_admin" ? "Temple Admin" : "System Admin"}
+            </p>
           </div>
-          <LogOut size={14} color="rgba(255,255,255,0.4)" style={{ cursor: "pointer" }} />
+          <LogOut size={14} color="rgba(255,255,255,0.4)" style={{ cursor: "pointer" }} onClick={() => {
+            localStorage.removeItem("yatrasetu_token");
+            window.location.reload();
+          }} />
         </div>
       </div>
     </div>

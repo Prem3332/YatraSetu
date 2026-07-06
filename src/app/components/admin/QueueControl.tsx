@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Bell, ChevronDown, Search, CheckCircle, SkipForward, Volume2 } from "lucide-react";
+import { useTemple } from "../../context/TempleContext";
 
 const allTokens = [
   { id: "A240", name: "Priya Mehta", booked: "10:30 AM", slot: "Morning · 11:00 AM", status: "Completed" },
@@ -31,6 +32,9 @@ export function QueueControl() {
   const [filter, setFilter] = useState("All");
   const [tokens, setTokens] = useState(allTokens);
   const [currentToken, setCurrentToken] = useState("A246");
+  const { selectedTemple } = useTemple();
+
+  // TODO: Filter queue data by selectedTemple._id — replace static allTokens with API data
 
   const filtered = filter === "All" ? tokens : tokens.filter((t) => t.status === filter);
   const waitingCount = tokens.filter((t) => t.status === "Waiting").length;
@@ -81,12 +85,12 @@ export function QueueControl() {
       <div className="flex items-center justify-between px-6 py-4" style={{ background: "#fff", borderBottom: "1px solid rgba(45, 66, 56,0.08)", flexShrink: 0 }}>
         <div>
           <h1 style={{ fontSize: "18px", fontWeight: 800, color: "#2D4238", margin: 0 }}>Queue Control Panel</h1>
-          <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>Somnath Temple · Afternoon Session</p>
+          <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>{selectedTemple?.name ?? "No Temple Selected"} · Afternoon Session</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "#f0ede8", border: "none" }}>
             <span style={{ fontSize: "12px" }}>🛕</span>
-            <span style={{ fontSize: "12px", fontWeight: 600, color: "#2D4238" }}>Somnath</span>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: "#2D4238" }}>{selectedTemple?.name ?? "Temple"}</span>
             <ChevronDown size={14} color="#9ca3af" />
           </div>
           <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "#f0ede8" }}>

@@ -1,37 +1,13 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, Calendar, Clock, Loader2 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
+import { useTemple } from "../../context/TempleContext";
+import { fetchSlotAvailability, bookDarshanSlot, SlotAvailability } from "../../lib/api";
 
 interface QueueBookingScreenProps {
   onBack: () => void;
   onConfirm: () => void;
 }
-
-const slots = {
-  Morning: [
-    { time: "6:00 AM", spots: 8 },
-    { time: "7:00 AM", spots: 0 },
-    { time: "8:00 AM", spots: 32 },
-    { time: "9:00 AM", spots: 0 },
-    { time: "10:00 AM", spots: 15 },
-  ],
-  Afternoon: [
-    { time: "12:00 PM", spots: 44 },
-    { time: "1:00 PM", spots: 28 },
-    { time: "2:00 PM", spots: 0 },
-    { time: "3:00 PM", spots: 19 },
-    { time: "4:00 PM", spots: 7 },
-  ],
-  Evening: [
-    { time: "5:00 PM", spots: 0 },
-    { time: "6:00 PM", spots: 12 },
-    { time: "7:00 PM", spots: 36 },
-    { time: "8:00 PM", spots: 0 },
-    { time: "9:00 PM", spots: 22 },
-  ],
-};
-
-const notAvailableDates = new Set([3, 7, 12, 15, 19, 23, 28]);
 
 function CalendarMonth({
   year,
@@ -57,23 +33,23 @@ function CalendarMonth({
 
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <p style={{ textAlign: "center", fontWeight: 700, fontSize: "16px", color: "#2D4238", margin: "0 0 14px 0", fontFamily: "Georgia, serif" }}>
+      <p style={{ textAlign: "center", fontWeight: 700, fontSize: "15px", color: "#2D4238", margin: "0 0 10px 0", fontFamily: "Georgia, serif" }}>
         {monthName} {year}
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px", marginBottom: "6px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", marginBottom: "4px" }}>
         {dayLabels.map((d) => (
-          <div key={d} style={{ textAlign: "center", fontSize: "9px", fontWeight: 600, color: "#9ca3af", fontFamily: "Poppins, sans-serif" }}>
+          <div key={d} style={{ textAlign: "center", fontSize: "10px", fontWeight: 600, color: "#9ca3af", fontFamily: "Poppins, sans-serif", padding: "2px 0" }}>
             {d}
           </div>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" }}>
         {cells.map((day, idx) => {
-          if (!day) return <div key={`empty-${idx}`} style={{ aspectRatio: "0.65" }} />;
+          if (!day) return <div key={`empty-${idx}`} style={{ aspectRatio: "1" }} />;
           const cellDate = new Date(year, month, day);
           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const isPast = cellDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-          const isUnavailable = notAvailableDates.has(day) || isPast;
+          const isUnavailable = isPast;
           const isSelected = selectedDate === dateStr;
 
           let bg = "#ffffff";
@@ -93,10 +69,10 @@ function CalendarMonth({
                 cursor: isUnavailable ? "not-allowed" : "pointer",
                 fontFamily: "Poppins, sans-serif", display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "center", transition: "all 0.15s",
-                aspectRatio: "0.65", padding: 0,
+                aspectRatio: "1", padding: 0,
               }}
             >
-              <span style={{ fontSize: "14px", fontWeight: isSelected ? 800 : 700, color, lineHeight: 1 }}>{day}</span>
+              <span style={{ fontSize: "13px", fontWeight: isSelected ? 800 : 700, color, lineHeight: 1 }}>{day}</span>
             </button>
           );
         })}
@@ -109,36 +85,72 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
   const { t } = useLanguage();
   const today = new Date();
 
+  const { selectedTemple } = useTemple();
+
   // Step 1 = calendar, Step 2 = time + details
   const [step, setStep] = useState<1 | 2>(1);
   const [calendarOffset, setCalendarOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+
+  // Auto-advance to step 2 when a date is selected
+  const handleDateSelect = (dateStr: string) => {
+    setSelectedDate(dateStr);
+    setTimeout(() => setStep(2), 350);
+  };
+  
   const [people, setPeople] = useState(2);
   const [accessibility, setAccessibility] = useState(false);
   const [name, setName] = useState("Ramesh Patel");
   const [phone, setPhone] = useState("+91 98765 43210");
-  const [templeSlots, setTempleSlots] = useState<Record<string, {time: string, spots: number}[]> | null>(null);
+  
+  const [availableSlots, setAvailableSlots] = useState<SlotAvailability[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotError, setSlotError] = useState<string | null>(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
+
+  const templeId = selectedTemple?._id ?? null;
 
   useEffect(() => {
-    import("../../lib/api").then(({ fetchTemples }) => {
-      fetchTemples().then((temples) => {
-        if (temples && temples.length > 0) {
-          // In a real app we'd pass the specific templeId. For prototype, check if any has custom slots.
-          const t = temples.find(t => t.slotConfigurations && t.slotConfigurations.length > 0);
-          if (t && t.slotConfigurations && t.slotConfigurations.length > 0) {
-            const parsedSlots = t.slotConfigurations.map(sc => ({
-              time: `${sc.startTime} - ${sc.endTime}`,
-              spots: sc.capacity
-            }));
-            setTempleSlots({
-              "Custom Configured Slots": parsedSlots
-            });
-          }
-        }
-      }).catch(err => console.error("Failed to fetch custom slots:", err));
-    });
-  }, []);
+    if (templeId && selectedDate) {
+      setLoadingSlots(true);
+      setAvailableSlots([]);  // Reset before fetch to avoid stale data
+      setSlotError(null);     // Clear previous errors
+      fetchSlotAvailability(templeId, selectedDate)
+        .then((slots) => {
+          setAvailableSlots(slots);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch slots:", err);
+          setAvailableSlots([]);
+          setSlotError(err instanceof Error ? err.message : "Failed to load slots. Please try again.");
+        })
+        .finally(() => {
+          setLoadingSlots(false);
+        });
+    }
+  }, [templeId, selectedDate]);
+
+  const handleConfirmBooking = async () => {
+    if (!selectedTemple || !selectedDate || !selectedSlot) return;
+    
+    setBookingLoading(true);
+    try {
+      await bookDarshanSlot({
+        templeId: selectedTemple._id,
+        date: selectedDate,
+        timeSlot: selectedSlot,
+        peopleCount: people,
+        name,
+        phone
+      });
+      setBookingLoading(false);
+      onConfirm(); // Navigate to success / live queue screen
+    } catch (err: any) {
+      setBookingLoading(false);
+      alert("Booking failed: " + err.message);
+    }
+  };
 
   const baseMonth = today.getMonth() + calendarOffset * 2;
   const month1 = ((baseMonth % 12) + 12) % 12;
@@ -215,10 +227,10 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
 
       {/* ── STEP 1: Calendar ── */}
       {step === 1 && (
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", padding: "16px", gap: "12px" }}>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", padding: "16px", gap: "12px" }}>
 
           {/* Calendar card */}
-          <div style={{ background: "#fff", borderRadius: "20px", boxShadow: "0 2px 16px rgba(45, 66, 56,0.08)", overflow: "hidden", flex: 1, display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "#fff", borderRadius: "20px", boxShadow: "0 2px 16px rgba(45, 66, 56,0.08)", overflow: "hidden", display: "flex", flexDirection: "column", flex: 1 }}>
 
             {/* Calendar header */}
             <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #f3f4f6" }}>
@@ -231,19 +243,19 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
             </div>
 
             {/* Two-month calendars */}
-            <div style={{ flex: 1, padding: "12px 16px 8px", display: "flex", justifyContent: "center", overflowY: "auto" }}>
-              <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", justifyContent: "center", maxWidth: "680px", width: "100%" }}>
-                <div style={{ flex: "1 1 260px", minWidth: "260px", maxWidth: "320px" }}>
-                  <CalendarMonth year={year1} month={month1} selectedDate={selectedDate} onSelectDate={setSelectedDate} today={today} />
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px 4px", display: "flex", justifyContent: "center" }}>
+              <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", justifyContent: "center", maxWidth: "560px", width: "100%" }}>
+                <div style={{ flex: "1 1 200px", minWidth: "200px", maxWidth: "250px" }}>
+                  <CalendarMonth year={year1} month={month1} selectedDate={selectedDate} onSelectDate={handleDateSelect} today={today} />
                 </div>
-                <div style={{ flex: "1 1 260px", minWidth: "260px", maxWidth: "320px" }}>
-                  <CalendarMonth year={year2} month={month2} selectedDate={selectedDate} onSelectDate={setSelectedDate} today={today} />
+                <div style={{ flex: "1 1 200px", minWidth: "200px", maxWidth: "250px" }}>
+                  <CalendarMonth year={year2} month={month2} selectedDate={selectedDate} onSelectDate={handleDateSelect} today={today} />
                 </div>
               </div>
             </div>
 
             {/* Navigation + Legend */}
-            <div style={{ padding: "8px 14px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #f3f4f6" }}>
+            <div style={{ padding: "10px 14px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #f3f4f6" }}>
               <button
                 onClick={() => setCalendarOffset(Math.max(0, calendarOffset - 1))}
                 disabled={calendarOffset === 0}
@@ -285,21 +297,6 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
               </button>
             </div>
           </div>
-
-          {/* Continue button */}
-          <button
-            onClick={() => selectedDate && setStep(2)}
-            style={{
-              width: "100%", padding: "14px", borderRadius: "16px", border: "none",
-              background: selectedDate ? "#C84B31" : "#d1d5db",
-              color: "#fff", fontFamily: "Poppins, sans-serif", fontSize: "14px", fontWeight: 700,
-              cursor: selectedDate ? "pointer" : "not-allowed",
-              boxShadow: selectedDate ? "0 4px 16px rgba(200, 75, 49,0.4)" : "none",
-              transition: "all 0.2s", flexShrink: 0,
-            }}
-          >
-            {selectedDate ? `Continue with ${formattedDate} →` : "Select a date to continue"}
-          </button>
         </div>
       )}
 
@@ -338,39 +335,76 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
 
           {/* Time slots */}
           <div style={{ background: "#fff", borderRadius: "16px", padding: "16px", boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)" }}>
-            <p style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 12px 0" }}>
-              {t("queue.selectTime")}
-            </p>
-            {(Object.entries(templeSlots || slots) as [string, { time: string; spots: number }[]][]).map(([period, times]) => (
-              <div key={period} style={{ marginBottom: "14px" }}>
-                <p style={{ fontSize: "11px", fontWeight: 700, color: "#9ca3af", margin: "0 0 8px 0" }}>{period}</p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
-                  {times.map((slot) => {
-                    const isFull = slot.spots === 0;
-                    const isSelected = selectedSlot === `${period}-${slot.time}`;
-                    return (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <p style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.5px", margin: 0 }}>
+                {t("queue.selectTime")}
+              </p>
+              {loadingSlots && <Loader2 size={14} color="#C84B31" style={{ animation: "spin 1s linear infinite" }} />}
+            </div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+              {availableSlots.length > 0 ? availableSlots.map((slot) => {
+                const isFull = slot.status === "full" || slot.available === 0;
+                const isSelected = selectedSlot === slot.time;
+                return (
+                  <button
+                    key={slot.time}
+                    onClick={() => !isFull && setSelectedSlot(slot.time)}
+                    disabled={isFull}
+                    style={{
+                      background: isSelected ? "#C84B31" : isFull ? "#f4f2ee" : "#FFF3E8",
+                      border: isSelected ? "2px solid #C84B31" : isFull ? "2px solid #e5e7eb" : "2px solid #FED7AA",
+                      cursor: isFull ? "not-allowed" : "pointer",
+                      borderRadius: "12px", padding: "8px 4px",
+                      fontFamily: "Poppins, sans-serif", opacity: isFull ? 0.6 : 1,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <p style={{ fontSize: "11px", fontWeight: 700, color: isSelected ? "#fff" : isFull ? "#9ca3af" : "#2D4238", margin: 0 }}>{slot.time}</p>
+                    <p style={{ fontSize: "9px", color: isSelected ? "rgba(255,255,255,0.8)" : isFull ? "#9ca3af" : "#C84B31", margin: 0, fontWeight: 600 }}>
+                      {isFull ? "FULL" : `${slot.available} Left`}
+                    </p>
+                  </button>
+                );
+              }) : !loadingSlots && (
+                <div style={{ gridColumn: "span 3", textAlign: "center", padding: "16px 0" }}>
+                  {slotError ? (
+                    <>
+                      <p style={{ fontSize: "12px", color: "#EF4444", fontWeight: 600, margin: "0 0 4px 0" }}>
+                        ⚠️ {slotError}
+                      </p>
                       <button
-                        key={slot.time}
-                        onClick={() => !isFull && setSelectedSlot(`${period}-${slot.time}`)}
+                        onClick={() => {
+                          if (templeId && selectedDate) {
+                            setLoadingSlots(true);
+                            setSlotError(null);
+                            fetchSlotAvailability(templeId, selectedDate)
+                              .then((slots) => setAvailableSlots(slots))
+                              .catch((err) => {
+                                setAvailableSlots([]);
+                                setSlotError(err instanceof Error ? err.message : "Failed to load slots.");
+                              })
+                              .finally(() => setLoadingSlots(false));
+                          }
+                        }}
                         style={{
-                          background: isSelected ? "#C84B31" : isFull ? "#f4f2ee" : "#FFF3E8",
-                          border: isSelected ? "2px solid #C84B31" : isFull ? "2px solid #e5e7eb" : "2px solid #FED7AA",
-                          cursor: isFull ? "not-allowed" : "pointer",
-                          borderRadius: "12px", padding: "8px 4px",
-                          fontFamily: "Poppins, sans-serif", opacity: isFull ? 0.6 : 1,
-                          transition: "all 0.15s",
+                          fontSize: "11px", fontWeight: 700, color: "#C84B31",
+                          background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.2)",
+                          borderRadius: "8px", padding: "6px 16px", cursor: "pointer",
+                          fontFamily: "Poppins, sans-serif", marginTop: "6px",
                         }}
                       >
-                        <p style={{ fontSize: "11px", fontWeight: 700, color: isSelected ? "#fff" : isFull ? "#9ca3af" : "#2D4238", margin: 0 }}>{slot.time}</p>
-                        <p style={{ fontSize: "9px", color: isSelected ? "rgba(255,255,255,0.8)" : isFull ? "#9ca3af" : "#C84B31", margin: 0, fontWeight: 600 }}>
-                          {isFull ? t("queue.slotFull") : `${slot.spots} ${t("queue.slotLeft")}`}
-                        </p>
+                        Retry
                       </button>
-                    );
-                  })}
+                    </>
+                  ) : (
+                    <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                      No slots configured for this date.
+                    </p>
+                  )}
                 </div>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
 
           {/* Pilgrim details */}
@@ -423,17 +457,19 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
 
           {/* Confirm CTA */}
           <button
-            onClick={onConfirm}
+            onClick={handleConfirmBooking}
+            disabled={!selectedSlot || bookingLoading}
             style={{
               width: "100%", padding: "15px", borderRadius: "16px", border: "none",
               background: selectedSlot ? "#C84B31" : "#d1d5db",
               color: "#fff", fontFamily: "Poppins, sans-serif", fontSize: "15px", fontWeight: 700,
-              cursor: selectedSlot ? "pointer" : "not-allowed",
+              cursor: selectedSlot && !bookingLoading ? "pointer" : "not-allowed",
               boxShadow: selectedSlot ? "0 4px 20px rgba(200, 75, 49,0.35)" : "none",
-              transition: "all 0.2s",
+              transition: "all 0.2s", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px"
             }}
           >
-            {t("queue.confirm")}
+            {bookingLoading && <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />}
+            {bookingLoading ? "Confirming..." : t("queue.confirm")}
           </button>
           <p style={{ textAlign: "center", fontSize: "11px", color: "#9ca3af", margin: "-4px 0 8px" }}>
             📱 Your token will be sent via SMS

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { MapPin, Bell, ChevronRight, Clock, AlertTriangle } from "lucide-react";
+import { useNavigate } from "react-router";
+import { MapPin, Bell, ChevronRight, Clock, AlertTriangle, User } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { useLanguage } from "../../context/LanguageContext";
-import { fetchTemples } from "../../lib/api";
+import { fetchTemples, fetchCurrentUser, type ApiUser } from "../../lib/api";
 
 const fallbackTemples = [
   {
@@ -62,6 +63,20 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [temples, setTemples] = useState<any[]>(fallbackTemples);
   const crowdPercent = 62;
   const { language, setLanguage, t } = useLanguage();
+  const navigate = useNavigate();
+  const [user, setUser] = useState<ApiUser | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("yatrasetu_token");
+    if (token) {
+      fetchCurrentUser()
+        .then(u => setUser(u))
+        .catch(err => {
+          console.error("Failed to fetch user:", err);
+          localStorage.removeItem("yatrasetu_token");
+        });
+    }
+  }, []);
 
   useEffect(() => {
     fetchTemples().then(data => {
@@ -93,7 +108,9 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
         <div className="flex items-start justify-between">
           <div>
             <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "12px", marginBottom: "2px" }}>{t("home.greeting")}</p>
-            <h2 style={{ color: "#fff", fontSize: "18px", fontWeight: 700, margin: 0 }}>Ramesh Patel</h2>
+            <h2 style={{ color: "#fff", fontSize: "18px", fontWeight: 700, margin: 0 }}>
+              {user ? user.name : "Devotee"}
+            </h2>
             <div className="flex items-center gap-1 mt-1">
               <MapPin size={12} color="#C84B31" />
               <span style={{ color: "#C84B31", fontSize: "11px", fontWeight: 500 }}>{t("home.templeLocation")}</span>
@@ -125,6 +142,50 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
                 </button>
               ))}
             </div>
+
+            {/* Login / Profile Button */}
+            {user ? (
+              <button
+                onClick={() => onNavigate("profile")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  borderRadius: "8px",
+                  width: "28px",
+                  height: "28px",
+                  color: "#fff",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+                title="Profile"
+              >
+                <User size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate("/login")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: "#C84B31",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "0 10px",
+                  height: "28px",
+                  color: "#fff",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(200, 75, 49, 0.4)",
+                }}
+              >
+                <User size={14} />
+                <span style={{ fontSize: "11px", fontWeight: 600, fontFamily: "Poppins, sans-serif" }}>Login</span>
+              </button>
+            )}
+
             <div className="relative">
               <Bell size={20} color="rgba(255,255,255,0.8)" />
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center" style={{ fontSize: "9px", color: "#fff", fontWeight: 700 }}>2</span>

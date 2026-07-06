@@ -156,4 +156,63 @@ const deleteTemple = async (req, res) => {
   }
 };
 
-module.exports = { getTemples, getTempleBySlug, createTemple, deleteTemple };
+// ────────────────────────────────────────────────────────────
+// PUT /api/temples/:id
+// ────────────────────────────────────────────────────────────
+const updateTemple = async (req, res) => {
+  try {
+    const { name, slug, city, state, lat, lng, totalCapacity, timings, slotConfigurations } =
+      req.body;
+
+    // ── Validation ─────────────────────────────────────────
+    if (!name || !slug) {
+      return res.status(400).json({
+        success: false,
+        message: "Temple name and slug are required",
+      });
+    }
+
+    // ── Slugify defensively ────────────────────────────────
+    const normalizedSlug = slug.toLowerCase().trim();
+
+    // ── Duplicate check ────────────────────────────────────
+    const existing = await prisma.temple.findUnique({
+      where: { slug: normalizedSlug },
+    });
+    if (existing && existing.id !== req.params.id) {
+      return res.status(400).json({
+        success: false,
+        message: "A temple with this slug already exists",
+      });
+    }
+
+    // ── Update temple ──────────────────────────────────────
+    const temple = await prisma.temple.update({
+      where: { id: req.params.id },
+      data: {
+        name,
+        slug: normalizedSlug,
+        city,
+        state,
+        lat,
+        lng,
+        totalCapacity,
+        timings: timings || undefined,
+        slotConfigurations: slotConfigurations || [], // We should pass empty array to clear slots if they removed them
+      },
+      include: { zones: true },
+    });
+
+    return res.status(200).json({
+      success: true,
+      temple: formatTemple(temple),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+module.exports = { getTemples, getTempleBySlug, createTemple, updateTemple, deleteTemple };
