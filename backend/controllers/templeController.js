@@ -197,8 +197,8 @@ const updateTemple = async (req, res) => {
         lat,
         lng,
         totalCapacity,
-        timings: timings || undefined,
-        slotConfigurations: slotConfigurations || [], // We should pass empty array to clear slots if they removed them
+        timings: timings !== undefined ? timings : undefined,
+        slotConfigurations: slotConfigurations !== undefined ? slotConfigurations : undefined,
       },
       include: { zones: true },
     });

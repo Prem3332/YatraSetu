@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { User, LogOut, ArrowLeft, Mail, Phone, Calendar, Shield } from "lucide-react";
-import { fetchCurrentUser, type ApiUser } from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 
 interface ProfileScreenProps {
@@ -22,28 +22,10 @@ const colors = {
 
 export function ProfileScreen({ onBack }: ProfileScreenProps) {
   const navigate = useNavigate();
-  const [user, setUser] = useState<ApiUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const token = localStorage.getItem("yatrasetu_token");
-    if (token) {
-      fetchCurrentUser()
-        .then((u) => {
-          setUser(u);
-          setIsLoading(false);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch user:", err);
-          setIsLoading(false);
-        });
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
+  const { currentUser: user, loading: isLoading, logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem("yatrasetu_token");
+    logout();
     toast.success("Logged out successfully");
     // Go back to home after logout
     onBack();

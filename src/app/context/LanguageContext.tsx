@@ -20,10 +20,7 @@ const translations: Record<Language, Record<string, string>> = {
     // Home Screen
     "home.greeting": "Jai Shri Ram 🙏",
     "home.templeLocation": "Somnath Temple, Gujarat",
-    "home.liveWait": "Live · Current wait time: 45 mins",
-    "home.empty": "Empty",
-    "home.full": "Full",
-    "home.capacity": "62% capacity",
+
     "home.nearbyTemples": "Nearby Temples",
     "home.seeAll": "See All",
     "home.quickActions": "Quick Actions",
@@ -113,10 +110,7 @@ const translations: Record<Language, Record<string, string>> = {
     // Home Screen
     "home.greeting": "जय श्री राम 🙏",
     "home.templeLocation": "सोमनाथ मंदिर, गुजरात",
-    "home.liveWait": "लाइव · वर्तमान प्रतीक्षा समय: 45 मिनट",
-    "home.empty": "खाली",
-    "home.full": "भरा हुआ",
-    "home.capacity": "62% क्षमता",
+
     "home.nearbyTemples": "आसपास के मंदिर",
     "home.seeAll": "सभी देखें",
     "home.quickActions": "त्वरित विकल्प",
@@ -206,10 +200,7 @@ const translations: Record<Language, Record<string, string>> = {
     // Home Screen
     "home.greeting": "જય શ્રી રામ 🙏",
     "home.templeLocation": "સોમનાથ મંદિર, ગુજરાત",
-    "home.liveWait": "લાઈવ · વર્તમાન પ્રતિક્ષા સમય: 45 મિનિટ",
-    "home.empty": "ખાલી",
-    "home.full": "ભરેલું",
-    "home.capacity": "62% ક્ષમતા",
+
     "home.nearbyTemples": "નજીકના મંદિરો",
     "home.seeAll": "બધા જુઓ",
     "home.quickActions": "ઝડપી વિકલ્પો",

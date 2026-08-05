@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { LayoutDashboard, Users, Bell, BarChart2, FileText, Settings, Shield, LogOut, Building2 } from "lucide-react";
 import { useTemple } from "../../context/TempleContext";
 import { fetchCurrentUser, UserProfile } from "../../lib/api";
@@ -19,6 +20,7 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ active, onChange }: AdminSidebarProps) {
+  const navigate = useNavigate();
   const { selectedTemple } = useTemple();
   const [adminUser, setAdminUser] = useState<UserProfile | null>(null);
 
@@ -95,6 +97,31 @@ export function AdminSidebar({ active, onChange }: AdminSidebarProps) {
             </button>
           );
         })}
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Logout Button */}
+        <button
+          onClick={() => {
+            localStorage.removeItem("yatrasetu_token");
+            localStorage.removeItem("yatrasetu_app_mode");
+            navigate("/login");
+          }}
+          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left w-full"
+          style={{
+            background: "rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(239, 68, 68, 0.25)",
+            cursor: "pointer",
+            fontFamily: "Poppins, sans-serif",
+            marginTop: "8px",
+          }}
+        >
+          <LogOut size={18} color="#EF4444" strokeWidth={1.8} />
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "#EF4444" }}>
+            Logout
+          </span>
+        </button>
       </nav>
 
       {/* User info */}

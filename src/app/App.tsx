@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router";
 import { Shield, Smartphone, Monitor, Menu, X } from "lucide-react";
 import { LanguageProvider, useLanguage } from "./context/LanguageContext";
 import { TempleProvider } from "./context/TempleContext";
@@ -20,9 +20,12 @@ import { MaintenanceScreen } from "./components/pilgrim/MaintenanceScreen";
 import { SignupScreen } from "./components/pilgrim/SignupScreen";
 import { LoginScreen } from "./components/pilgrim/LoginScreen";
 import { VerifyEmailScreen } from "./components/pilgrim/VerifyEmailScreen";
+import { ForgotPasswordScreen } from "./components/pilgrim/ForgotPasswordScreen";
+import { ResetPasswordScreen } from "./components/pilgrim/ResetPasswordScreen";
 import { ProfileScreen } from "./components/pilgrim/ProfileScreen";
 import { Toaster } from "./components/ui/sonner";
-import { fetchSystemSettings, fetchCurrentUser } from "./lib/api";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { SettingsProvider, useSettings } from "./context/SettingsContext";
 
 type AppMode = "devotee" | "admin";
 type DevoteeScreen = "home" | "queue" | "live" | "map" | "emergency" | "alerts" | "profile";
@@ -48,41 +51,32 @@ export function AppContent() {
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [estimatedCompletion, setEstimatedCompletion] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+
   // ── Auth state for role-based access ──────────────────────
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const isAdmin = userRole === "temple_admin";
+  const { currentUser, loading: authLoading, isAdmin } = useAuth();
+  const { settings, refreshSettings } = useSettings();
 
   useEffect(() => {
-    const token = localStorage.getItem("yatrasetu_token");
-    if (token) {
-      fetchCurrentUser()
-        .then((u) => setUserRole(u.role))
-        .catch(() => setUserRole(null));
+    if (!authLoading && !currentUser) {
+      navigate("/login");
     }
-  }, []);
+  }, [currentUser, authLoading, navigate]);
 
   // If a non-admin somehow ends up in admin mode, force them back ONLY after role is known
   useEffect(() => {
-    // Wait until userRole has been resolved (null means still loading)
-    if (userRole !== null && mode === "admin" && !isAdmin) {
+    if (!authLoading && mode === "admin" && !isAdmin) {
       setMode("devotee");
     }
-  }, [mode, isAdmin, userRole]);
+  }, [mode, isAdmin, authLoading]);
 
-  const loadSettings = async () => {
-    try {
-      const settings = await fetchSystemSettings();
+  useEffect(() => {
+    if (settings) {
       setMaintenanceMode(settings.maintenanceMode);
       setMaintenanceMessage(settings.maintenanceMessage);
       setEstimatedCompletion(settings.estimatedCompletion);
-    } catch (err) {
-      console.error("Failed to load system settings", err);
     }
-  };
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  }, [settings]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
@@ -168,7 +162,10 @@ export function AppContent() {
         }}
       >
         {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+        <div
+          onClick={() => { setMode("devotee"); setDevoteeScreen("home"); }}
+          style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0, cursor: "pointer" }}
+        >
           <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "#C84B31", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Shield size={18} color="#fff" />
           </div>
@@ -342,7 +339,7 @@ export function AppContent() {
               <MaintenanceScreen
                 message={maintenanceMessage}
                 estimatedCompletion={estimatedCompletion}
-                onRefresh={loadSettings}
+                onRefresh={refreshSettings}
               />
             ) : (
               <>
@@ -351,7 +348,9 @@ export function AppContent() {
                   {devoteeScreen === "queue" && (
                     <QueueBookingScreen
                       onBack={() => setDevoteeScreen("home")}
-                      onConfirm={() => setDevoteeScreen("live")}
+                      onConfirm={(bookingId: string) => {
+                        setDevoteeScreen("live");
+                      }}
                     />
                   )}
               {devoteeScreen === "live" && <LiveQueueScreen onBack={() => setDevoteeScreen("home")} />}
@@ -408,15 +407,21 @@ export default function App() {
   return (
     <BrowserRouter>
       <LanguageProvider>
-        <TempleProvider>
-          <Routes>
-            <Route path="/signup" element={<SignupScreen />} />
-            <Route path="/verify-email" element={<VerifyEmailScreen />} />
-            <Route path="/login" element={<LoginScreen />} />
-            <Route path="/*" element={<AppContent />} />
-          </Routes>
-          <Toaster position="top-center" richColors closeButton />
-        </TempleProvider>
+        <AuthProvider>
+          <TempleProvider>
+            <SettingsProvider>
+              <Routes>
+                <Route path="/signup" element={<SignupScreen />} />
+                <Route path="/verify-email" element={<VerifyEmailScreen />} />
+                <Route path="/login" element={<LoginScreen />} />
+                <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+                <Route path="/reset-password" element={<ResetPasswordScreen />} />
+                <Route path="/*" element={<AppContent />} />
+              </Routes>
+              <Toaster position="top-center" richColors closeButton />
+            </SettingsProvider>
+          </TempleProvider>
+        </AuthProvider>
       </LanguageProvider>
     </BrowserRouter>
   );

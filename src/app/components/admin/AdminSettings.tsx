@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 import { Settings, Shield, Loader2, Power, MessageSquare, Clock, Save, CheckCircle2 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import {
-  fetchSystemSettings,
   updateSystemSettings as apiUpdateSystemSettings,
   SystemSettings,
 } from "../../lib/api";
+import { useSettings } from "../../context/SettingsContext";
 
 export function AdminSettings() {
-  const [loading, setLoading] = useState(true);
+  const { settings, loading: contextLoading, refreshSettings, error: contextError } = useSettings();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,14 +26,7 @@ export function AdminSettings() {
   });
 
   useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const settings = await fetchSystemSettings();
+    if (settings) {
       setMaintenanceMode(settings.maintenanceMode);
       setMaintenanceMessage(settings.maintenanceMessage);
 
@@ -47,13 +40,14 @@ export function AdminSettings() {
         message: settings.maintenanceMessage,
         est: estStr,
       });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to load settings";
-      setError(msg);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [settings]);
+
+  useEffect(() => {
+    if (contextError) {
+      setError(contextError);
+    }
+  }, [contextError]);
 
   const hasChanges =
     maintenanceMode !== original.mode ||
@@ -169,7 +163,7 @@ export function AdminSettings() {
 
       {/* Content */}
       <div style={{ padding: "24px 32px", maxWidth: "640px" }}>
-        {loading ? (
+        {contextLoading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 0" }}>
             <Loader2 size={24} color="#C84B31" style={{ animation: "spin 1s linear infinite" }} />
           </div>
@@ -177,7 +171,7 @@ export function AdminSettings() {
           <div style={{ ...cardStyle, textAlign: "center" }}>
             <p style={{ color: "#EF4444", fontSize: "13px", margin: "0 0 12px 0" }}>⚠️ {error}</p>
             <button
-              onClick={loadSettings}
+              onClick={refreshSettings}
               style={{
                 background: "rgba(200,75,49,0.15)",
                 color: "#C84B31",

@@ -1,57 +1,30 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  type ReactNode,
-} from "react";
-
-import { fetchTemples, fetchCurrentUser, type Temple, type ApiUser } from "../lib/api";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { fetchTemples, type Temple } from "../lib/api";
 import { getSelectedTempleId, setStoredTempleId } from "../lib/templeUtils";
-
-// ── Context shape ──────────────────────────────────────────────
+import { useAuth } from "./AuthContext";
 
 interface TempleContextType {
-  /** All temples loaded from the API */
   temples: Temple[];
-  /** Currently selected temple (null while loading or if none exist) */
   selectedTemple: Temple | null;
-  /** Select a temple (no-op if temple is assigned by admin) */
   setSelectedTemple: (temple: Temple) => void;
-  /** Re-fetch the temple list from the API */
   refreshTemples: () => Promise<void>;
-  /** True while the initial temple fetch is in progress */
   loading: boolean;
-  /** Error message if the API call failed */
   error: string | null;
-  /** The currently logged-in user (null if not authenticated) */
-  currentUser: ApiUser | null;
-  /** True if the user is a temple_admin with an assigned temple (dropdown locked) */
   isTempleAssigned: boolean;
 }
 
 const TempleContext = createContext<TempleContextType | undefined>(undefined);
 
-// ── Provider ───────────────────────────────────────────────────
-
-interface TempleProviderProps {
-  children: ReactNode;
-}
-
-export function TempleProvider({ children }: TempleProviderProps) {
+export function TempleProvider({ children }: { children: ReactNode }) {
+  const { currentUser } = useAuth();
+  
   const [temples, setTemples] = useState<Temple[]>([]);
   const [selectedTemple, setSelectedTempleState] = useState<Temple | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
   const [isTempleAssigned, setIsTempleAssigned] = useState(false);
 
-  // Prevent double-fetching in React StrictMode
   const hasFetched = useRef(false);
-
-  // ── Load temples ──────────────────────────────────────────
 
   const loadTemples = useCallback(async (): Promise<Temple[]> => {
     try {
@@ -69,50 +42,30 @@ export function TempleProvider({ children }: TempleProviderProps) {
     }
   }, []);
 
-  // ── Resolve which temple to select ────────────────────────
-
-  const resolveSelection = useCallback(
-    (templeList: Temple[], user: ApiUser | null): Temple | null => {
-      // Task 6: If user is a temple_admin with an assigned temple, force-select it
-      if (
-        user &&
-        user.role === "temple_admin" &&
-        user.templeAssigned
-      ) {
-        const assigned = templeList.find((t) => t._id === user.templeAssigned);
-        if (assigned) {
-          setIsTempleAssigned(true);
-          return assigned;
-        }
+  const resolveSelection = useCallback((templeList: Temple[], user: typeof currentUser): Temple | null => {
+    if (user && user.role === "temple_admin" && user.templeAssigned) {
+      const assigned = templeList.find((t) => t._id === user.templeAssigned);
+      if (assigned) {
+        setIsTempleAssigned(true);
+        return assigned;
       }
+    }
 
-      // Task 3: Try restoring from localStorage
-      const storedId = getSelectedTempleId();
-      if (storedId) {
-        const stored = templeList.find((t) => t._id === storedId);
-        if (stored) return stored;
-      }
+    setIsTempleAssigned(false);
+    const storedId = getSelectedTempleId();
+    if (storedId) {
+      const stored = templeList.find((t) => t._id === storedId);
+      if (stored) return stored;
+    }
 
-      // Fallback: select the first temple
-      return templeList.length > 0 ? templeList[0] : null;
-    },
-    []
-  );
+    return templeList.length > 0 ? templeList[0] : null;
+  }, []);
 
-  // ── Set selected temple (with persistence) ────────────────
-
-  const setSelectedTemple = useCallback(
-    (temple: Temple) => {
-      // Task 6: Block changes if temple is assigned by admin
-      if (isTempleAssigned) return;
-
-      setSelectedTempleState(temple);
-      setStoredTempleId(temple._id);
-    },
-    [isTempleAssigned]
-  );
-
-  // ── Refresh temples (public API) ──────────────────────────
+  const setSelectedTemple = useCallback((temple: Temple) => {
+    if (isTempleAssigned) return;
+    setSelectedTempleState(temple);
+    setStoredTempleId(temple._id);
+  }, [isTempleAssigned]);
 
   const refreshTemples = useCallback(async () => {
     const data = await loadTemples();
@@ -123,27 +76,13 @@ export function TempleProvider({ children }: TempleProviderProps) {
     }
   }, [loadTemples, resolveSelection, currentUser]);
 
-  // ── Initial fetch on mount ────────────────────────────────
-
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
 
     const init = async () => {
-      // Fetch user (silently skip if not authenticated)
-      let user: ApiUser | null = null;
-      try {
-        user = await fetchCurrentUser();
-        setCurrentUser(user);
-      } catch {
-        // Not logged in or no token — this is fine
-      }
-
-      // Fetch temples
       const templeList = await loadTemples();
-
-      // Resolve selection
-      const resolved = resolveSelection(templeList, user);
+      const resolved = resolveSelection(templeList, currentUser);
       setSelectedTempleState(resolved);
       if (resolved) {
         setStoredTempleId(resolved._id);
@@ -151,9 +90,17 @@ export function TempleProvider({ children }: TempleProviderProps) {
     };
 
     init();
-  }, [loadTemples, resolveSelection]);
+  }, [loadTemples, resolveSelection, currentUser]);
 
-  // ── Context value ─────────────────────────────────────────
+  // Re-resolve selection if currentUser changes (e.g. login/logout)
+  useEffect(() => {
+    if (!hasFetched.current || temples.length === 0) return;
+    const resolved = resolveSelection(temples, currentUser);
+    setSelectedTempleState(resolved);
+    if (resolved) {
+      setStoredTempleId(resolved._id);
+    }
+  }, [currentUser, temples, resolveSelection]);
 
   const contextValue: TempleContextType = {
     temples,
@@ -162,7 +109,6 @@ export function TempleProvider({ children }: TempleProviderProps) {
     refreshTemples,
     loading,
     error,
-    currentUser,
     isTempleAssigned,
   };
 
@@ -172,8 +118,6 @@ export function TempleProvider({ children }: TempleProviderProps) {
     </TempleContext.Provider>
   );
 }
-
-// ── Hook ────────────────────────────────────────────────────
 
 export function useTemple(): TempleContextType {
   const context = useContext(TempleContext);

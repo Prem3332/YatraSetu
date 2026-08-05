@@ -22,6 +22,7 @@ async function main() {
       data: {
         role: 'temple_admin',
         passwordHash,
+        email: 'yatrasetu.official@gmail.com'
       }
     });
     console.log("Admin account updated.");
@@ -34,7 +35,7 @@ async function main() {
         role: 'temple_admin',
         gender: 'Other',
         age: 30,
-        email: 'admin@yatrasetu.com'
+        email: 'yatrasetu.official@gmail.com'
       }
     });
     console.log("Admin account created.");

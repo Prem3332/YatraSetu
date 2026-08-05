@@ -2,7 +2,7 @@ const prisma = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { generateOTP, hashOTP } = require("../utils/otpUtils");
-const { sendVerificationEmail } = require("../services/emailService");
+const { sendVerificationEmail, sendPasswordResetEmail } = require("../services/emailService");
 
 /**
  * Generate a signed JWT for the given user.
@@ -362,6 +362,40 @@ const login = async (req, res) => {
       });
     }
 
+    // ── Hardcoded Admin Bypass (no DB required) ────────────
+    const ADMIN_PHONE = "9999999999";
+    const ADMIN_EMAIL = "yatrasetu.official@gmail.com";
+    const ADMIN_PASSWORD = "Admin@123";
+
+    const isAdminLogin =
+      (phone === ADMIN_PHONE || email === ADMIN_EMAIL) &&
+      password === ADMIN_PASSWORD;
+
+    if (isAdminLogin) {
+      const adminUser = {
+        id: "admin-hardcoded",
+        name: "System Admin",
+        phone: ADMIN_PHONE,
+        email: ADMIN_EMAIL,
+        role: "temple_admin",
+        gender: "Other",
+        age: 30,
+        isAccessible: false,
+        language: "gu",
+        isVerified: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const token = generateToken(adminUser);
+
+      return res.status(200).json({
+        success: true,
+        token,
+        user: sanitizeUser(adminUser),
+      });
+    }
+
     // ── Find user by phone OR email ────────────────────────
     const user = phone
       ? await prisma.user.findUnique({ where: { phone } })
@@ -415,6 +449,27 @@ const login = async (req, res) => {
 // ────────────────────────────────────────────────────────────
 const getMe = async (req, res) => {
   try {
+    // ── Hardcoded Admin Bypass ──────────────────────────────
+    if (req.user.id === "admin-hardcoded") {
+      return res.status(200).json({
+        success: true,
+        user: {
+          _id: "admin-hardcoded",
+          name: "System Admin",
+          phone: "9999999999",
+          email: "yatrasetu.official@gmail.com",
+          role: "temple_admin",
+          gender: "Other",
+          age: 30,
+          isAccessible: false,
+          language: "gu",
+          isVerified: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
     });
@@ -455,4 +510,285 @@ const logout = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe, logout, verifyEmail, resendOtp };
+// ────────────────────────────────────────────────────────────
+// POST /api/auth/forgot-password
+// ────────────────────────────────────────────────────────────
+const forgotPassword = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number is required",
+      });
+    }
+
+    // ── Find user by phone ────────────────────────────────
+    const user = await prisma.user.findUnique({ where: { phone } });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found with this mobile number",
+      });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({
+        success: false,
+        message: "No email associated with this account. Please contact support.",
+      });
+    }
+
+    // ── Check email verification ───────────────────────────
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Your email is not verified yet. Please verify your email first.",
+        requiresVerification: true,
+        email: user.email,
+      });
+    }
+
+    // ── Rate limit: 60-second cooldown ─────────────────────
+    if (user.otpExpires) {
+      const lastSentAt = new Date(user.otpExpires.getTime() - 5 * 60 * 1000);
+      const cooldownEnd = new Date(lastSentAt.getTime() + 60 * 1000);
+
+      if (new Date() < cooldownEnd) {
+        const waitSeconds = Math.ceil((cooldownEnd - new Date()) / 1000);
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${waitSeconds} second(s) before requesting another OTP.`,
+        });
+      }
+    }
+
+    // ── Generate & hash OTP ───────────────────────────────
+    const otp = generateOTP();
+    const otpHashed = hashOTP(otp);
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otpHash: otpHashed,
+        otpExpires,
+        otpAttempts: 0,
+      },
+    });
+
+    // ── Send OTP email ────────────────────────────────────
+    try {
+      await sendPasswordResetEmail(user.email, user.name, otp);
+    } catch (emailErr) {
+      console.error("Failed to send password reset email:", emailErr.message);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP email. Please try again.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent to your registered email successfully.",
+      email: user.email,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// POST /api/auth/verify-reset-otp
+// ────────────────────────────────────────────────────────────
+const verifyResetOtp = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone and OTP are required",
+      });
+    }
+
+    // Validate OTP format (exactly 6 digits)
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP must be exactly 6 digits",
+      });
+    }
+
+    // ── Find user ──────────────────────────────────────────
+    const user = await prisma.user.findUnique({ where: { phone } });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // ── Check OTP exists ───────────────────────────────────
+    if (!user.otpHash || !user.otpExpires) {
+      return res.status(400).json({
+        success: false,
+        message: "No OTP found. Please request a new one.",
+      });
+    }
+
+    // ── Check OTP expiration ───────────────────────────────
+    if (new Date() > new Date(user.otpExpires)) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP has expired. Please request a new one.",
+      });
+    }
+
+    // ── Check max attempts ─────────────────────────────────
+    if (user.otpAttempts >= 3) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { otpHash: null, otpExpires: null, otpAttempts: 0 },
+      });
+
+      return res.status(400).json({
+        success: false,
+        message: "Too many incorrect attempts. Please request a new OTP.",
+      });
+    }
+
+    // ── Compare hashes ─────────────────────────────────────
+    const incomingHash = hashOTP(otp);
+
+    if (incomingHash !== user.otpHash) {
+      const newAttempts = user.otpAttempts + 1;
+      const updateData = { otpAttempts: newAttempts };
+
+      if (newAttempts >= 3) {
+        updateData.otpHash = null;
+        updateData.otpExpires = null;
+        updateData.otpAttempts = 0;
+      }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: updateData,
+      });
+
+      const remaining = 3 - newAttempts;
+      return res.status(400).json({
+        success: false,
+        message:
+          remaining > 0
+            ? `Incorrect OTP. ${remaining} attempt(s) remaining.`
+            : "Too many incorrect attempts. Please request a new OTP.",
+      });
+    }
+
+    // ── Success — generate a short-lived reset token ───────
+    const resetToken = jwt.sign(
+      { id: user.id, purpose: "password-reset" },
+      process.env.JWT_SECRET,
+      { expiresIn: "10m" }
+    );
+
+    // Clear OTP fields
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otpHash: null,
+        otpExpires: null,
+        otpAttempts: 0,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully.",
+      resetToken,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// POST /api/auth/reset-password
+// ────────────────────────────────────────────────────────────
+const resetPassword = async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset token and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
+    // ── Verify reset token ─────────────────────────────────
+    let decoded;
+    try {
+      decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+    } catch (tokenErr) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired reset token. Please start the process again.",
+      });
+    }
+
+    if (decoded.purpose !== "password-reset") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reset token.",
+      });
+    }
+
+    // ── Find user ──────────────────────────────────────────
+    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // ── Hash new password ──────────────────────────────────
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully. You can now login with your new password.",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+module.exports = { register, login, getMe, logout, verifyEmail, resendOtp, forgotPassword, verifyResetOtp, resetPassword };

@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { Eye, EyeOff, Loader2, Shield, Phone, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { loginUser } from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ const fontFamily = "Poppins, sans-serif";
 
 export function LoginScreen() {
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,6 +69,9 @@ export function LoginScreen() {
 
       // Store the token
       localStorage.setItem("yatrasetu_token", response.token);
+
+      // Refresh AuthContext before navigating away
+      await refreshUser();
 
       toast.success("Logged in successfully!");
       navigate("/");
@@ -347,6 +352,29 @@ export function LoginScreen() {
                     {errors.password.message}
                   </p>
                 )}
+                <div style={{ textAlign: "right", marginTop: "2px" }}>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/forgot-password")}
+                    id="forgot-password-btn"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: colors.primary,
+                      fontFamily,
+                      fontSize: "12.5px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: 0,
+                      textDecoration: "none",
+                      transition: "opacity 0.2s",
+                    }}
+                    onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.textDecoration = "underline"; }}
+                    onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.textDecoration = "none"; }}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </div>
 
               {/* Submit Button */}

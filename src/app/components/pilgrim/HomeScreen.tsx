@@ -1,54 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { MapPin, Bell, ChevronRight, Clock, AlertTriangle, User } from "lucide-react";
+import { MapPin, Bell, ChevronRight, Clock, AlertTriangle, User, Loader2 } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { useLanguage } from "../../context/LanguageContext";
-import { fetchTemples, fetchCurrentUser, type ApiUser } from "../../lib/api";
-
-const fallbackTemples = [
-  {
-    id: "somnath",
-    name: "Somnath",
-    subtitle: "Saurashtra",
-    crowd: "Moderate",
-    crowdColor: "#F59E0B",
-    crowdBg: "#FEF3C7",
-    darshan: "6:00 AM – 9:30 PM",
-    img: "https://images.unsplash.com/photo-1570605505301-0f713202ca7a?w=200&h=130&fit=crop&auto=format",
-  },
-  {
-    id: "dwarka",
-    name: "Dwarka",
-    subtitle: "Devbhoomi Dwarka",
-    crowd: "High",
-    crowdColor: "#EF4444",
-    crowdBg: "#FEE2E2",
-    darshan: "6:30 AM – 8:00 PM",
-    img: "https://images.unsplash.com/photo-1650868469306-3b9a0a198945?w=200&h=130&fit=crop&auto=format",
-  },
-  {
-    id: "ambaji",
-    name: "Ambaji",
-    subtitle: "Banaskantha",
-    crowd: "Low",
-    crowdColor: "#22C55E",
-    crowdBg: "#DCFCE7",
-    darshan: "7:00 AM – 9:00 PM",
-    img: "https://images.unsplash.com/photo-1717326630799-703fe906e283?w=200&h=130&fit=crop&auto=format",
-  },
-  {
-    id: "pavagadh",
-    name: "Pavagadh",
-    subtitle: "Panchmahal",
-    crowd: "Low",
-    crowdColor: "#22C55E",
-    crowdBg: "#DCFCE7",
-    darshan: "7:00 AM – 7:00 PM",
-    img: "https://images.unsplash.com/photo-1649996255271-9a20a441d25d?w=200&h=130&fit=crop&auto=format",
-  },
-];
-
-const quickActions = [
+import { fetchCurrentUser, type ApiUser } from "../../lib/api";
+import { useTemple } from "../../context/TempleContext";
+import { fetchTodayTrafficForAll, type DailyTraffic } from "../../lib/api/queue";
+import { getTrafficInfoFromOccupancy } from "./QueueBooking/useMonthlyTraffic";const quickActions = [
   { id: "queue", label: "Book Darshan Slot", icon: "🗓️", color: "#FFF3E8", border: "#FED7AA" },
   { id: "live", label: "Live Queue Status", icon: "🔴", color: "#FEF2F2", border: "#FECACA" },
   { id: "map", label: "Temple Map", icon: "🗺️", color: "#EFF6FF", border: "#BFDBFE" },
@@ -60,8 +18,9 @@ interface HomeScreenProps {
 }
 
 export function HomeScreen({ onNavigate }: HomeScreenProps) {
-  const [temples, setTemples] = useState<any[]>(fallbackTemples);
-  const crowdPercent = 62;
+  const { temples, loading } = useTemple();
+  const [todayTraffic, setTodayTraffic] = useState<Record<string, DailyTraffic>>({});
+
   const { language, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const [user, setUser] = useState<ApiUser | null>(null);
@@ -79,26 +38,9 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
   }, []);
 
   useEffect(() => {
-    fetchTemples().then(data => {
-      if (data && data.length > 0) {
-        const mapped = data.map((t, i) => {
-          const fallback = fallbackTemples[i % fallbackTemples.length];
-          return {
-            id: t._id,
-            name: t.name,
-            subtitle: t.city || t.state || fallback.subtitle,
-            crowd: fallback.crowd,
-            crowdColor: fallback.crowdColor,
-            crowdBg: fallback.crowdBg,
-            darshan: t.timings && t.timings.length > 0 ? `${t.timings[0].open} - ${t.timings[0].close}` : fallback.darshan,
-            img: fallback.img,
-          };
-        });
-        setTemples(mapped);
-      } else {
-        setTemples([]);
-      }
-    }).catch(err => console.error("Failed to fetch temples for home screen:", err));
+    fetchTodayTrafficForAll()
+      .then(data => setTodayTraffic(data))
+      .catch(err => console.error("Failed to fetch today traffic:", err));
   }, []);
 
   return (
@@ -193,36 +135,6 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
           </div>
         </div>
 
-        {/* Live status strip */}
-        <div className="mt-4 rounded-2xl p-3" style={{ background: "rgba(255,255,255,0.1)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.15)" }}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-red-400" style={{ animation: "pulse 2s infinite" }} />
-              <span style={{ color: "#fff", fontSize: "12px", fontWeight: 600 }}>{t("home.liveWait")}</span>
-            </div>
-            <span style={{ color: "#C84B31", fontSize: "11px", fontWeight: 600 }}>Somnath</span>
-          </div>
-          {/* Crowd density bar */}
-          <div className="flex gap-1">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex-1 rounded-sm"
-                style={{
-                  height: "8px",
-                  background: i < 6
-                    ? i < 4 ? "#22C55E" : i < 7 ? "#F59E0B" : "#EF4444"
-                    : "rgba(255,255,255,0.2)",
-                }}
-              />
-            ))}
-          </div>
-          <div className="flex justify-between mt-1">
-            <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "10px" }}>{t("home.empty")}</span>
-            <span style={{ color: "#F59E0B", fontSize: "10px", fontWeight: 600 }}>{t("home.capacity")}</span>
-            <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "10px" }}>{t("home.full")}</span>
-          </div>
-        </div>
       </div>
 
       <div className="flex-1 p-4" style={{ gap: "16px", display: "flex", flexDirection: "column" }}>
@@ -233,30 +145,53 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             <button style={{ color: "#C84B31", fontSize: "12px", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>{t("home.seeAll")}</button>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-            {temples.map((t) => (
-              <div
-                key={t.id}
-                className="flex-shrink-0 rounded-2xl overflow-hidden"
-                style={{ width: "155px", background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.08)", border: "1px solid rgba(45, 66, 56,0.06)", cursor: "pointer" }}
-                onClick={() => onNavigate("queue")}
-              >
-                <div className="relative" style={{ height: "90px", background: "#e5e7eb" }}>
-                  <ImageWithFallback src={t.img} alt={t.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  <div className="absolute top-2 right-2 rounded-full px-2 py-0.5 flex items-center gap-1" style={{ background: t.crowdBg }}>
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: t.crowdColor }} />
-                    <span style={{ fontSize: "9px", fontWeight: 700, color: t.crowdColor }}>{t.crowd}</span>
-                  </div>
-                </div>
-                <div className="p-2.5">
-                  <p style={{ fontSize: "13px", fontWeight: 700, color: "#2D4238", margin: 0 }}>{t.name}</p>
-                  <p style={{ fontSize: "10px", color: "#9ca3af", margin: "1px 0 4px" }}>{t.subtitle}</p>
-                  <div className="flex items-center gap-1">
-                    <Clock size={9} color="#C84B31" />
-                    <span style={{ fontSize: "9px", color: "#6b7280", fontWeight: 500 }}>{t.darshan}</span>
-                  </div>
-                </div>
+            {loading ? (
+              <div className="flex items-center justify-center w-full py-8">
+                <Loader2 size={24} color="#C84B31" style={{ animation: "spin 1s linear infinite" }} />
               </div>
-            ))}
+            ) : temples.length === 0 ? (
+              <div className="flex items-center justify-center w-full py-8">
+                <span style={{ fontSize: "12px", color: "#6b7280" }}>No temples available.</span>
+              </div>
+            ) : (
+              temples.map((t) => {
+                const img = "https://images.unsplash.com/photo-1570605505301-0f713202ca7a?w=200&h=130&fit=crop&auto=format";
+                const subtitle = t.city || t.state || "Location";
+                const dt = todayTraffic[t._id];
+                const trafficInfo = dt ? getTrafficInfoFromOccupancy(dt.totalCapacity, dt.totalBooked, dt.totalAvailable) : null;
+                
+                const crowd = trafficInfo ? trafficInfo.label : "Loading...";
+                const crowdColor = trafficInfo ? trafficInfo.color : "#9ca3af";
+                const crowdBg = trafficInfo ? trafficInfo.bgColor : "#f3f4f6";
+
+                const darshan = t.timings && t.timings.length > 0 ? `${t.timings[0].open} - ${t.timings[0].close}` : "6:00 AM - 9:00 PM";
+                
+                return (
+                  <div
+                    key={t._id}
+                    className="flex-shrink-0 rounded-2xl overflow-hidden"
+                    style={{ width: "155px", background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.08)", border: "1px solid rgba(45, 66, 56,0.06)", cursor: "pointer" }}
+                    onClick={() => onNavigate("queue")}
+                  >
+                    <div className="relative" style={{ height: "90px", background: "#e5e7eb" }}>
+                      <ImageWithFallback src={img} alt={t.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                    <div className="p-2.5">
+                      <p style={{ fontSize: "13px", fontWeight: 700, color: "#2D4238", margin: 0 }}>{t.name}</p>
+                      <p style={{ fontSize: "10px", color: "#9ca3af", margin: "1px 0 4px" }}>{subtitle}</p>
+                      <div className="flex items-center gap-1 mb-1.5">
+                        <Clock size={9} color="#C84B31" />
+                        <span style={{ fontSize: "9px", color: "#6b7280", fontWeight: 500 }}>{darshan}</span>
+                      </div>
+                      <div className="inline-flex rounded-full px-2 py-0.5 items-center gap-1" style={{ background: crowdBg }}>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: crowdColor }} />
+                        <span style={{ fontSize: "9px", fontWeight: 700, color: crowdColor }}>{crowd}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
