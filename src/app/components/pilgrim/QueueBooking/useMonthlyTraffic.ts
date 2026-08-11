@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchMonthlyAvailability, DailyTraffic } from "../../../lib/api";
 
 export type TrafficLevel = "available" | "low" | "medium" | "high" | "full";
@@ -43,11 +43,45 @@ export function getTrafficDotColor(level: TrafficLevel): string {
   }
 }
 
-// Global cache to persist across component mounts
+// Global cache — keyed by templeId-year-month
 const monthlyTrafficCache: Record<string, Record<string, DailyTraffic>> = {};
+
+/**
+ * Clear all cached traffic data for a specific temple (or all temples).
+ * Call this after a booking is confirmed so the calendar re-fetches fresh data.
+ */
+export function clearMonthlyTrafficCache(templeId?: string) {
+  if (templeId) {
+    // Remove only entries for this temple
+    for (const key of Object.keys(monthlyTrafficCache)) {
+      if (key.startsWith(`${templeId}-`)) {
+        delete monthlyTrafficCache[key];
+      }
+    }
+  } else {
+    // Clear everything
+    for (const key of Object.keys(monthlyTrafficCache)) {
+      delete monthlyTrafficCache[key];
+    }
+  }
+}
 
 export function useMonthlyTraffic(templeId: string | null, year1: number, month1: number, year2: number, month2: number) {
   const [cacheTrigger, setCacheTrigger] = useState(0);
+
+  // When templeId changes, invalidate cache for the old temple and force re-fetch
+  const prevTempleIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (templeId !== prevTempleIdRef.current) {
+      // Temple changed — clear cache for the previous temple so we don't show stale data
+      if (prevTempleIdRef.current) {
+        clearMonthlyTrafficCache(prevTempleIdRef.current);
+      }
+      prevTempleIdRef.current = templeId;
+      // Force re-render to pick up fresh (empty) cache state
+      setCacheTrigger((c) => c + 1);
+    }
+  }, [templeId]);
 
   useEffect(() => {
     if (!templeId) return;
@@ -74,7 +108,7 @@ export function useMonthlyTraffic(templeId: string | null, year1: number, month1
     return () => {
       mounted = false;
     };
-  }, [templeId, year1, month1, year2, month2]);
+  }, [templeId, year1, month1, year2, month2, cacheTrigger]);
 
   const dailyTrafficMonth1 = useMemo(() => {
     if (!templeId) return undefined;

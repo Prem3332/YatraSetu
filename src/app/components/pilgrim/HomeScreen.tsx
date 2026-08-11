@@ -18,7 +18,7 @@ interface HomeScreenProps {
 }
 
 export function HomeScreen({ onNavigate }: HomeScreenProps) {
-  const { temples, loading } = useTemple();
+  const { temples, selectedTemple, setSelectedTemple, loading } = useTemple();
   const [todayTraffic, setTodayTraffic] = useState<Record<string, DailyTraffic>>({});
 
   const { language, setLanguage, t } = useLanguage();
@@ -171,7 +171,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
                     key={t._id}
                     className="flex-shrink-0 rounded-2xl overflow-hidden"
                     style={{ width: "155px", background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.08)", border: "1px solid rgba(45, 66, 56,0.06)", cursor: "pointer" }}
-                    onClick={() => onNavigate("queue")}
+                    onClick={() => { setSelectedTemple(t); onNavigate("queue"); }}
                   >
                     <div className="relative" style={{ height: "90px", background: "#e5e7eb" }}>
                       <ImageWithFallback src={img} alt={t.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -235,7 +235,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
         {/* Today's schedule */}
         <div className="rounded-2xl p-4" style={{ background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)", border: "1px solid rgba(45, 66, 56,0.06)" }}>
           <div className="flex items-center justify-between mb-3">
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#2D4238", margin: 0 }}>Today's Schedule · Somnath</h3>
+            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#2D4238", margin: 0 }}>Today's Schedule · {selectedTemple?.name || "Temple"}</h3>
             <ChevronRight size={16} color="#9ca3af" />
           </div>
           {[

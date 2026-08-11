@@ -194,6 +194,9 @@ model Slot {
 
   @@index([userId, slotDate])
   @@index([queueId, status, tokenNumber])
+  @@index([status])
+  @@index([templeId, slotDate])
+  @@index([tokenNumber])
   @@map("slots")
 }
 

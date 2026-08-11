@@ -3,3 +3,4 @@ export * from "./auth";
 export * from "./temple";
 export * from "./queue";
 export * from "./system";
+export * from "./admin";

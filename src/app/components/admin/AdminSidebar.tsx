@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { LayoutDashboard, Users, Bell, BarChart2, FileText, Settings, Shield, LogOut, Building2 } from "lucide-react";
 import { useTemple } from "../../context/TempleContext";
-import { fetchCurrentUser, UserProfile } from "../../lib/api";
+import { fetchCurrentUser, ApiUser } from "../../lib/api";
 
 const navItems = [
   { id: "crowd", label: "Dashboard", icon: LayoutDashboard },
@@ -22,7 +22,7 @@ interface AdminSidebarProps {
 export function AdminSidebar({ active, onChange }: AdminSidebarProps) {
   const navigate = useNavigate();
   const { selectedTemple } = useTemple();
-  const [adminUser, setAdminUser] = useState<UserProfile | null>(null);
+  const [adminUser, setAdminUser] = useState<ApiUser | null>(null);
 
   useEffect(() => {
     fetchCurrentUser()

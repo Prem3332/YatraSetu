@@ -214,7 +214,7 @@ exports.getTodayTraffic = async (req, res) => {
  */
 exports.bookSlot = async (req, res) => {
   try {
-    const { templeId, date, timeSlot, peopleCount } = req.body;
+    const { templeId, date, timeSlot, peopleCount, name, phone } = req.body;
     
     // Auth middleware guarantees req.user exists (dev mode falls back to dev-admin-id)
     const userId = req.user.id;
@@ -287,16 +287,29 @@ exports.bookSlot = async (req, res) => {
         }
       });
 
-      // Create User if doesn't exist for dev mock
+      // Create or update User with dynamic name and phone from the booking form
       let user = await tx.user.findUnique({ where: { id: userId } });
+      
+      const dynamicName = name || (user ? user.name : "Devotee User");
+      const dynamicPhone = phone || (user ? user.phone : "+91" + Math.floor(1000000000 + Math.random() * 9000000000));
+
       if (!user) {
         user = await tx.user.create({
           data: {
             id: userId,
-            name: "Devotee User",
-            phone: "+91" + Math.floor(1000000000 + Math.random() * 9000000000),
+            name: dynamicName,
+            phone: dynamicPhone,
             passwordHash: "mock",
             role: "devotee"
+          }
+        });
+      } else if (name || phone) {
+        // If the user already exists, update their name and phone to match the latest booking details
+        user = await tx.user.update({
+          where: { id: userId },
+          data: {
+            name: dynamicName,
+            phone: dynamicPhone,
           }
         });
       }
@@ -317,6 +330,9 @@ exports.bookSlot = async (req, res) => {
 
       return newSlot;
     });
+
+    const io = req.app.get("io");
+    if (io) io.emit("QUEUE_UPDATED", { templeId });
 
     res.json({ success: true, message: "Booking confirmed", booking: result });
 
@@ -593,6 +609,9 @@ exports.cancelBooking = async (req, res) => {
         }
       });
     });
+
+    const io = req.app.get("io");
+    if (io) io.emit("QUEUE_UPDATED", { templeId: slot.templeId });
 
     res.json({ success: true, message: "Booking cancelled successfully" });
 

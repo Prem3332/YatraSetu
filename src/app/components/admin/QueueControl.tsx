@@ -1,105 +1,169 @@
-import { useState } from "react";
-import { Bell, ChevronDown, Search, CheckCircle, SkipForward, Volume2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  Bell,
+  ChevronDown,
+  Search,
+  CheckCircle,
+  Play,
+  XCircle,
+  Volume2,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  AlertCircle,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import { useTemple } from "../../context/TempleContext";
-
-const allTokens = [
-  { id: "A240", name: "Priya Mehta", booked: "10:30 AM", slot: "Morning · 11:00 AM", status: "Completed" },
-  { id: "A241", name: "Ramesh Sharma", booked: "11:15 AM", slot: "Morning · 11:00 AM", status: "Completed" },
-  { id: "A242", name: "Kavita Patel", booked: "11:20 AM", slot: "Morning · 11:00 AM", status: "Completed" },
-  { id: "A243", name: "Mohan Das", booked: "12:00 PM", slot: "Afternoon · 12:00 PM", status: "Completed" },
-  { id: "A244", name: "Sunita Gupta", booked: "12:10 PM", slot: "Afternoon · 12:00 PM", status: "Called" },
-  { id: "A245", name: "Deepak Joshi", booked: "12:15 PM", slot: "Afternoon · 12:00 PM", status: "Called" },
-  { id: "A246", name: "Anita Verma", booked: "12:20 PM", slot: "Afternoon · 1:00 PM", status: "Called" },
-  { id: "A247", name: "Ramesh Patel", booked: "12:30 PM", slot: "Afternoon · 1:00 PM", status: "Waiting" },
-  { id: "A248", name: "Lata Desai", booked: "12:35 PM", slot: "Afternoon · 1:00 PM", status: "Waiting" },
-  { id: "A249", name: "Vijay Rao", booked: "12:40 PM", slot: "Afternoon · 2:00 PM", status: "Waiting" },
-  { id: "A250", name: "Neha Singh", booked: "12:45 PM", slot: "Afternoon · 2:00 PM", status: "Waiting" },
-  { id: "A251", name: "Arun Kumar", booked: "12:50 PM", slot: "Afternoon · 2:00 PM", status: "Waiting" },
-];
+import { useAdminData } from "../../lib/useAdminData";
 
 const statusColor: Record<string, string> = {
-  Waiting: "#C84B31",
-  Called: "#3B82F6",
-  Completed: "#22C55E",
+  booked: "#C84B31",
+  serving: "#3B82F6",
+  completed: "#22C55E",
+  cancelled: "#6B7280",
 };
+
 const statusBg: Record<string, string> = {
-  Waiting: "#FFF3E8",
-  Called: "#EFF6FF",
-  Completed: "#F0FDF4",
+  booked: "#FFF3E8",
+  serving: "#EFF6FF",
+  completed: "#F0FDF4",
+  cancelled: "#F3F4F6",
+};
+
+const statusLabel: Record<string, string> = {
+  booked: "Booked",
+  serving: "Serving",
+  completed: "Completed",
+  cancelled: "Cancelled",
 };
 
 export function QueueControl() {
-  const [filter, setFilter] = useState("All");
-  const [tokens, setTokens] = useState(allTokens);
-  const [currentToken, setCurrentToken] = useState("A246");
   const { selectedTemple } = useTemple();
+  const templeId = selectedTemple?._id;
 
-  // TODO: Filter queue data by selectedTemple._id — replace static allTokens with API data
+  const {
+    bookings,
+    pagination,
+    statistics,
+    filters,
+    loading,
+    error,
+    updatingId,
+    setFilter,
+    changePage,
+    changeLimit,
+    updateStatus,
+    deleteBooking,
+    refresh,
+  } = useAdminData(templeId);
 
-  const filtered = filter === "All" ? tokens : tokens.filter((t) => t.status === filter);
-  const waitingCount = tokens.filter((t) => t.status === "Waiting").length;
-  const calledCount = tokens.filter((t) => t.status === "Called").length;
-  const completedCount = tokens.filter((t) => t.status === "Completed").length;
+  const [searchInput, setSearchInput] = useState(filters.search || "");
 
-  const nextWaiting = tokens.find((t) => t.status === "Waiting");
+  // Debounce search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (searchInput !== (filters.search || "")) {
+        setFilter("search", searchInput);
+      }
+    }, 400);
 
-  const callNext = () => {
-    if (!nextWaiting) return;
-    setTokens((prev) =>
-      prev.map((t) => (t.id === nextWaiting.id ? { ...t, status: "Called" } : t))
-    );
-    setCurrentToken(nextWaiting.id);
-  };
+    return () => clearTimeout(handler);
+  }, [searchInput, filters.search, setFilter]);
 
-  const markComplete = (id: string) => {
-    setTokens((prev) => prev.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
-  };
+  const activeStatus = filters.status || "All";
 
-  const skip = (id: string) => {
-    setTokens((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx === -1 || idx >= prev.length - 1) return prev;
-      const next = [...prev];
-      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-      return next;
-    });
-  };
+  const nextWaiting = bookings.find((b) => b.status === "booked");
+  const currentlyServing = bookings.find((b) => b.status === "serving");
+
+  const todayStr = new Date().toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "#F5F0E6", fontFamily: "Poppins, sans-serif", overflow: "hidden" }}>
+    <div
+      className="flex flex-col h-full"
+      style={{
+        background: "#F5F0E6",
+        fontFamily: "Poppins, sans-serif",
+        overflow: "hidden",
+      }}
+    >
       {/* Announcement bar */}
-      <div className="flex items-center justify-between px-6 py-2.5" style={{ background: "#2D4238", flexShrink: 0 }}>
+      <div
+        className="flex items-center justify-between px-6 py-2.5"
+        style={{ background: "#2D4238", flexShrink: 0 }}
+      >
         <div className="flex items-center gap-2">
           <Volume2 size={14} color="#C84B31" />
-          <span style={{ fontSize: "12px", color: "#fff", fontWeight: 600 }}>Currently serving: </span>
-          <span style={{ fontSize: "12px", color: "#C84B31", fontWeight: 800 }}>{currentToken}</span>
-          <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}> at Main Entry Gate</span>
+          <span style={{ fontSize: "12px", color: "#fff", fontWeight: 600 }}>
+            Currently Serving:{" "}
+          </span>
+          <span style={{ fontSize: "12px", color: "#C84B31", fontWeight: 800 }}>
+            {statistics?.currentToken ? `Token #${statistics.currentToken}` : currentlyServing ? `Token #${currentlyServing.tokenNumber}` : "None"}
+          </span>
+          <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>
+            {" "}
+            at {selectedTemple?.name ?? "Temple Gate"}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-400" />
-          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)" }}>Gate 1 Open</span>
+          <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)" }}>
+            Main Gate Open
+          </span>
         </div>
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4" style={{ background: "#fff", borderBottom: "1px solid rgba(45, 66, 56,0.08)", flexShrink: 0 }}>
+      <div
+        className="flex items-center justify-between px-6 py-4"
+        style={{
+          background: "#fff",
+          borderBottom: "1px solid rgba(45, 66, 56,0.08)",
+          flexShrink: 0,
+        }}
+      >
         <div>
-          <h1 style={{ fontSize: "18px", fontWeight: 800, color: "#2D4238", margin: 0 }}>Queue Control Panel</h1>
-          <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>{selectedTemple?.name ?? "No Temple Selected"} · Afternoon Session</p>
+          <h1
+            style={{
+              fontSize: "18px",
+              fontWeight: 800,
+              color: "#2D4238",
+              margin: 0,
+            }}
+          >
+            Queue Control Panel
+          </h1>
+          <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+            {selectedTemple?.name ?? "All Temples"} · Live Queue & Booking Operations
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "#f0ede8", border: "none" }}>
-            <span style={{ fontSize: "12px" }}>🛕</span>
-            <span style={{ fontSize: "12px", fontWeight: 600, color: "#2D4238" }}>{selectedTemple?.name ?? "Temple"}</span>
-            <ChevronDown size={14} color="#9ca3af" />
-          </div>
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "#f0ede8" }}>
-            <span style={{ fontSize: "12px", color: "#374151", fontWeight: 600 }}>June 11, 2026</span>
-            <ChevronDown size={14} color="#9ca3af" />
-          </div>
-          <div className="relative">
-            <Bell size={20} color="#2D4238" style={{ cursor: "pointer" }} />
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "#EF4444", fontSize: "9px", color: "#fff", fontWeight: 700 }}>3</span>
+          <button
+            onClick={refresh}
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold"
+            style={{
+              background: "#f0ede8",
+              color: "#2D4238",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+          <div
+            className="flex items-center gap-2 rounded-xl px-3 py-2"
+            style={{ background: "#f0ede8" }}
+          >
+            <span
+              style={{ fontSize: "12px", color: "#374151", fontWeight: 600 }}
+            >
+              {todayStr}
+            </span>
           </div>
         </div>
       </div>
@@ -107,156 +171,627 @@ export function QueueControl() {
       <div className="flex flex-1 overflow-hidden gap-5 p-5">
         {/* Main content */}
         <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-          {/* Filters */}
+          {/* Filters & Search */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: "#fff", boxShadow: "0 2px 8px rgba(45, 66, 56,0.06)" }}>
-              {["All", "Waiting", "Called", "Completed"].map((f) => (
+            <div
+              className="flex items-center gap-1 rounded-xl p-1"
+              style={{
+                background: "#fff",
+                boxShadow: "0 2px 8px rgba(45, 66, 56,0.06)",
+              }}
+            >
+              {["All", "booked", "serving", "completed", "cancelled"].map(
+                (f) => {
+                  const label = f === "All" ? "All" : statusLabel[f] || f;
+                  const isSelected = activeStatus.toLowerCase() === f.toLowerCase();
+                  return (
+                    <button
+                      key={f}
+                      onClick={() => setFilter("status", f)}
+                      className="rounded-lg px-3 py-1.5"
+                      style={{
+                        background: isSelected ? "#2D4238" : "transparent",
+                        color: isSelected ? "#fff" : "#6b7280",
+                        fontFamily: "Poppins, sans-serif",
+                        fontSize: "12px",
+                        fontWeight: isSelected ? 700 : 500,
+                        border: "none",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+
+            <div
+              className="flex items-center gap-2 rounded-xl px-3 py-2 flex-1"
+              style={{
+                background: "#fff",
+                boxShadow: "0 2px 8px rgba(45, 66, 56,0.06)",
+              }}
+            >
+              <Search size={14} color="#9ca3af" />
+              <input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search by devotee name, phone, or token #"
+                style={{
+                  border: "none",
+                  outline: "none",
+                  fontSize: "12px",
+                  color: "#374151",
+                  fontFamily: "Poppins, sans-serif",
+                  background: "transparent",
+                  width: "100%",
+                }}
+              />
+              {searchInput && (
                 <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className="rounded-lg px-3 py-1.5"
+                  onClick={() => setSearchInput("")}
                   style={{
-                    background: filter === f ? "#2D4238" : "transparent",
-                    color: filter === f ? "#fff" : "#6b7280",
-                    fontFamily: "Poppins, sans-serif",
-                    fontSize: "12px",
-                    fontWeight: filter === f ? 700 : 500,
                     border: "none",
+                    background: "transparent",
+                    color: "#9ca3af",
                     cursor: "pointer",
-                    whiteSpace: "nowrap",
+                    fontSize: "12px",
                   }}
                 >
-                  {f}
-                  {f === "Waiting" && ` (${waitingCount})`}
-                  {f === "Called" && ` (${calledCount})`}
-                  {f === "Completed" && ` (${completedCount})`}
+                  ✕
                 </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 rounded-xl px-3 py-2 flex-1" style={{ background: "#fff", boxShadow: "0 2px 8px rgba(45, 66, 56,0.06)" }}>
-              <Search size={14} color="#9ca3af" />
-              <input placeholder="Search token or name..." style={{ border: "none", outline: "none", fontSize: "12px", color: "#374151", fontFamily: "Poppins, sans-serif", background: "transparent", width: "100%" }} />
+              )}
             </div>
           </div>
 
-          {/* Table */}
-          <div className="flex-1 overflow-hidden rounded-2xl" style={{ background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)" }}>
-            <div className="overflow-auto h-full">
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#F5F0E6", position: "sticky", top: 0 }}>
-                    {["Token #", "Name", "Booked Time", "Slot", "Status", "Actions"].map((h) => (
-                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px", fontFamily: "Poppins, sans-serif", borderBottom: "1px solid rgba(45, 66, 56,0.06)" }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((token, i) => (
-                    <tr
-                      key={token.id}
+          {/* Table Container */}
+          <div
+            className="flex-1 flex flex-col overflow-hidden rounded-2xl"
+            style={{
+              background: "#fff",
+              boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)",
+            }}
+          >
+            {loading ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-gray-500">
+                <Loader2 size={32} className="animate-spin text-emerald-700 mb-2" />
+                <p style={{ fontSize: "14px", fontWeight: 600 }}>Loading live queue data...</p>
+              </div>
+            ) : error ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-rose-600">
+                <AlertCircle size={32} className="mb-2" />
+                <p style={{ fontSize: "14px", fontWeight: 600 }}>{error}</p>
+                <button
+                  onClick={refresh}
+                  className="mt-4 rounded-xl px-4 py-2 bg-rose-100 text-rose-700 font-semibold text-xs border border-rose-200"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : bookings.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-gray-400">
+                <p style={{ fontSize: "15px", fontWeight: 600 }}>No bookings found</p>
+                <p style={{ fontSize: "12px" }}>
+                  Try adjusting your search query or status filter.
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-auto">
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#F5F0E6", position: "sticky", top: 0, zIndex: 10 }}>
+                      {[
+                        "Token #",
+                        "Devotee Name",
+                        "Phone",
+                        "Temple",
+                        "Date & Slot",
+                        "People",
+                        "Status",
+                        "Booking Time",
+                        "Actions",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            padding: "12px 16px",
+                            textAlign: "left",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            color: "#9ca3af",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                            fontFamily: "Poppins, sans-serif",
+                            borderBottom: "1px solid rgba(45, 66, 56,0.06)",
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookings.map((booking, i) => {
+                      const isUpdating = updatingId === booking.id;
+                      const status = booking.status.toLowerCase();
+                      const dateDisplay = booking.slotDate
+                        ? new Date(booking.slotDate).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "—";
+
+                      const bookingTimeDisplay = booking.bookingTime
+                        ? new Date(booking.bookingTime).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—";
+
+                      return (
+                        <tr
+                          key={booking.id}
+                          style={{
+                            background:
+                              status === "serving"
+                                ? "#EFF6FF"
+                                : i % 2 === 0
+                                ? "#fff"
+                                : "#fafafa",
+                            borderBottom: "1px solid rgba(45, 66, 56,0.04)",
+                          }}
+                        >
+                          {/* Token Number */}
+                          <td style={{ padding: "12px 16px" }}>
+                            <span
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: 800,
+                                color: status === "serving" ? "#3B82F6" : "#2D4238",
+                              }}
+                            >
+                              #{booking.tokenNumber}
+                            </span>
+                            {status === "serving" && (
+                              <span
+                                className="ml-2 rounded-full px-1.5 py-0.5"
+                                style={{
+                                  background: "#3B82F6",
+                                  color: "#fff",
+                                  fontSize: "9px",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                SERVING
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Devotee Name */}
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              fontSize: "13px",
+                              color: "#374151",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {booking.userName}
+                          </td>
+
+                          {/* Phone */}
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              fontSize: "12px",
+                              color: "#6b7280",
+                            }}
+                          >
+                            {booking.userPhone}
+                          </td>
+
+                          {/* Temple */}
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              fontSize: "12px",
+                              color: "#374151",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {booking.templeName}
+                          </td>
+
+                          {/* Date & Slot */}
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              fontSize: "12px",
+                              color: "#6b7280",
+                            }}
+                          >
+                            <span className="font-semibold text-gray-700">{dateDisplay}</span>
+                            <span className="text-gray-400 block text-xs">{booking.slotTime}</span>
+                          </td>
+
+                          {/* People Count */}
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              fontSize: "13px",
+                              fontWeight: 700,
+                              color: "#2D4238",
+                            }}
+                          >
+                            {booking.peopleCount}
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ padding: "12px 16px" }}>
+                            <span
+                              className="rounded-full px-2.5 py-1"
+                              style={{
+                                background: statusBg[status] || "#F3F4F6",
+                                color: statusColor[status] || "#6B7280",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {statusLabel[status] || status}
+                            </span>
+                          </td>
+
+                          {/* Booking Time */}
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              fontSize: "11px",
+                              color: "#9ca3af",
+                            }}
+                          >
+                            {bookingTimeDisplay}
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ padding: "12px 16px" }}>
+                            <div className="flex items-center gap-1.5">
+                              {isUpdating ? (
+                                <Loader2 size={14} className="animate-spin text-gray-400" />
+                              ) : (
+                                <>
+                                  {status === "booked" && (
+                                    <button
+                                      onClick={() => updateStatus(booking.id, "serving")}
+                                      className="flex items-center gap-1 rounded-lg px-2 py-1"
+                                      style={{
+                                        background: "#EFF6FF",
+                                        border: "1px solid #BFDBFE",
+                                        cursor: "pointer",
+                                        fontSize: "11px",
+                                        color: "#2563EB",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      <Play size={11} /> Serve
+                                    </button>
+                                  )}
+
+                                  {(status === "booked" || status === "serving") && (
+                                    <button
+                                      onClick={() => updateStatus(booking.id, "completed")}
+                                      className="flex items-center gap-1 rounded-lg px-2 py-1"
+                                      style={{
+                                        background: "#F0FDF4",
+                                        border: "1px solid #BBF7D0",
+                                        cursor: "pointer",
+                                        fontSize: "11px",
+                                        color: "#16A34A",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      <CheckCircle size={11} /> Complete
+                                    </button>
+                                  )}
+
+                                  {status !== "cancelled" && status !== "completed" && (
+                                    <button
+                                      onClick={() => updateStatus(booking.id, "cancelled")}
+                                      className="flex items-center gap-1 rounded-lg px-2 py-1"
+                                      style={{
+                                        background: "#FEF2F2",
+                                        border: "1px solid #FECACA",
+                                        cursor: "pointer",
+                                        fontSize: "11px",
+                                        color: "#DC2626",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      <XCircle size={11} /> Cancel
+                                    </button>
+                                  )}
+
+                                  {(status === "completed" || status === "cancelled") && (
+                                    <button
+                                      onClick={() => deleteBooking(booking.id)}
+                                      className="flex items-center gap-1 rounded-lg px-2 py-1"
+                                      style={{
+                                        background: "transparent",
+                                        border: "1px solid #E5E7EB",
+                                        cursor: "pointer",
+                                        fontSize: "11px",
+                                        color: "#6B7280",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      <Trash2 size={11} /> Delete
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Footer */}
+            {!loading && !error && bookings.length > 0 && (
+              <div
+                className="flex items-center justify-between px-5 py-3"
+                style={{
+                  borderTop: "1px solid rgba(45, 66, 56,0.06)",
+                  background: "#fff",
+                }}
+              >
+                <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                  Showing{" "}
+                  <span className="font-semibold text-gray-800">
+                    {(pagination.page - 1) * pagination.limit + 1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-gray-800">
+                    {Math.min(pagination.page * pagination.limit, pagination.total)}
+                  </span>{" "}
+                  of <span className="font-semibold text-gray-800">{pagination.total}</span>{" "}
+                  bookings
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: "12px", color: "#6b7280" }}>Show:</span>
+                    <select
+                      value={pagination.limit}
+                      onChange={(e) => changeLimit(Number(e.target.value))}
                       style={{
-                        background: token.id === currentToken ? "#FFF3E8" : i % 2 === 0 ? "#fff" : "#fafafa",
-                        borderBottom: "1px solid rgba(45, 66, 56,0.04)",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        padding: "2px 6px",
+                        fontSize: "12px",
+                        outline: "none",
                       }}
                     >
-                      <td style={{ padding: "12px 16px" }}>
-                        <span style={{ fontSize: "14px", fontWeight: 800, color: token.id === currentToken ? "#C84B31" : "#2D4238", fontFamily: "Poppins, sans-serif" }}>{token.id}</span>
-                        {token.id === currentToken && (
-                          <span className="ml-2 rounded-full px-1.5 py-0.5" style={{ background: "#C84B31", color: "#fff", fontSize: "9px", fontWeight: 700 }}>NOW</span>
-                        )}
-                      </td>
-                      <td style={{ padding: "12px 16px", fontSize: "13px", color: "#374151", fontWeight: 600, fontFamily: "Poppins, sans-serif" }}>{token.name}</td>
-                      <td style={{ padding: "12px 16px", fontSize: "12px", color: "#9ca3af", fontFamily: "Poppins, sans-serif" }}>{token.booked}</td>
-                      <td style={{ padding: "12px 16px", fontSize: "12px", color: "#6b7280", fontFamily: "Poppins, sans-serif" }}>{token.slot}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span className="rounded-full px-2.5 py-1" style={{ background: statusBg[token.status], color: statusColor[token.status], fontSize: "11px", fontWeight: 700, fontFamily: "Poppins, sans-serif" }}>
-                          {token.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <div className="flex items-center gap-2">
-                          {token.status === "Waiting" && (
-                            <>
-                              <button
-                                onClick={() => skip(token.id)}
-                                className="flex items-center gap-1 rounded-lg px-2 py-1"
-                                style={{ background: "#f0ede8", border: "none", cursor: "pointer", fontFamily: "Poppins, sans-serif", fontSize: "11px", color: "#6b7280", fontWeight: 600 }}
-                              >
-                                <SkipForward size={11} /> Skip
-                              </button>
-                            </>
-                          )}
-                          {token.status === "Called" && (
-                            <button
-                              onClick={() => markComplete(token.id)}
-                              className="flex items-center gap-1 rounded-lg px-2 py-1"
-                              style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", cursor: "pointer", fontFamily: "Poppins, sans-serif", fontSize: "11px", color: "#16A34A", fontWeight: 600 }}
-                            >
-                              <CheckCircle size={11} /> Complete
-                            </button>
-                          )}
-                          {token.status === "Completed" && (
-                            <span style={{ fontSize: "11px", color: "#9ca3af" }}>Done</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      disabled={pagination.page <= 1}
+                      onClick={() => changePage(pagination.page - 1)}
+                      className="p-1.5 rounded-lg border flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ borderColor: "#d1d5db", cursor: "pointer" }}
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span style={{ fontSize: "12px", color: "#374151", fontWeight: 600, padding: "0 4px" }}>
+                      {pagination.page} / {pagination.totalPages}
+                    </span>
+                    <button
+                      disabled={pagination.page >= pagination.totalPages}
+                      onClick={() => changePage(pagination.page + 1)}
+                      className="p-1.5 rounded-lg border flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ borderColor: "#d1d5db", cursor: "pointer" }}
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right sidebar */}
-        <div className="flex flex-col gap-4" style={{ width: "240px", flexShrink: 0 }}>
-          {/* Call Next button */}
-          <div className="rounded-2xl p-4 flex flex-col items-center gap-3" style={{ background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)" }}>
-            <p style={{ fontSize: "11px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px", margin: 0 }}>Next Token</p>
-            <div className="text-center">
-              <p style={{ fontSize: "36px", fontWeight: 900, color: "#C84B31", margin: 0 }}>{nextWaiting?.id ?? "—"}</p>
-              <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{nextWaiting?.name ?? "Queue empty"}</p>
-            </div>
-            <button
-              onClick={callNext}
-              className="w-full rounded-xl py-3 flex items-center justify-center gap-2"
-              style={{ background: nextWaiting ? "#C84B31" : "#d1d5db", color: "#fff", fontFamily: "Poppins, sans-serif", fontSize: "14px", fontWeight: 800, border: "none", cursor: nextWaiting ? "pointer" : "not-allowed", boxShadow: nextWaiting ? "0 4px 16px rgba(200, 75, 49,0.3)" : "none" }}
+        <div
+          className="flex flex-col gap-4"
+          style={{ width: "240px", flexShrink: 0 }}
+        >
+          {/* Next Token Call */}
+          <div
+            className="rounded-2xl p-4 flex flex-col items-center gap-3"
+            style={{
+              background: "#fff",
+              boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "#9ca3af",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                margin: 0,
+              }}
             >
-              <Volume2 size={16} /> Call Next
-            </button>
+              Next Token
+            </p>
+            <div className="text-center">
+              <p
+                style={{
+                  fontSize: "36px",
+                  fontWeight: 900,
+                  color: "#C84B31",
+                  margin: 0,
+                }}
+              >
+                {statistics?.nextToken ? `#${statistics.nextToken}` : nextWaiting ? `#${nextWaiting.tokenNumber}` : "—"}
+              </p>
+              <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>
+                {nextWaiting ? nextWaiting.userName : "No waiting devotee"}
+              </p>
+            </div>
+            {nextWaiting && (
+              <button
+                onClick={() => updateStatus(nextWaiting.id, "serving")}
+                disabled={updatingId === nextWaiting.id}
+                className="w-full rounded-xl py-3 flex items-center justify-center gap-2"
+                style={{
+                  background: "#C84B31",
+                  color: "#fff",
+                  fontFamily: "Poppins, sans-serif",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  border: "none",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 16px rgba(200, 75, 49,0.3)",
+                }}
+              >
+                <Volume2 size={16} /> Serve Token #{nextWaiting.tokenNumber}
+              </button>
+            )}
           </div>
 
-          {/* Stats */}
-          <div className="rounded-2xl p-4" style={{ background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)" }}>
-            <p style={{ fontSize: "11px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 12px 0" }}>Queue Stats</p>
+          {/* Dynamic Statistics */}
+          <div
+            className="rounded-2xl p-4"
+            style={{
+              background: "#fff",
+              boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "#9ca3af",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                margin: "0 0 12px 0",
+              }}
+            >
+              Live Statistics (Today)
+            </p>
             {[
-              { label: "Total in Queue", value: `${waitingCount + calledCount}`, color: "#2D4238" },
-              { label: "Called Today", value: `${calledCount + completedCount}`, color: "#3B82F6" },
-              { label: "Avg Wait Time", value: "23 min", color: "#C84B31" },
-              { label: "Est. Clearance", value: "6:40 PM", color: "#22C55E" },
+              {
+                label: "Today's Bookings",
+                value: statistics?.todaysBookings ?? "—",
+                color: "#2D4238",
+              },
+              {
+                label: "Total Capacity",
+                value: statistics?.totalCapacity ?? "—",
+                color: "#374151",
+              },
+              {
+                label: "Available Slots",
+                value: statistics?.availableSlots ?? "—",
+                color: "#16A34A",
+              },
+              {
+                label: "Currently Serving",
+                value: statistics?.serving ?? "—",
+                color: "#3B82F6",
+              },
+              {
+                label: "Completed",
+                value: statistics?.completed ?? "—",
+                color: "#22C55E",
+              },
+              {
+                label: "Cancelled",
+                value: statistics?.cancelled ?? "—",
+                color: "#EF4444",
+              },
             ].map((s) => (
-              <div key={s.label} className="flex justify-between items-center py-2" style={{ borderBottom: "1px solid rgba(45, 66, 56,0.06)" }}>
-                <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500 }}>{s.label}</span>
-                <span style={{ fontSize: "13px", fontWeight: 800, color: s.color }}>{s.value}</span>
+              <div
+                key={s.label}
+                className="flex justify-between items-center py-2"
+                style={{ borderBottom: "1px solid rgba(45, 66, 56,0.06)" }}
+              >
+                <span
+                  style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500 }}
+                >
+                  {s.label}
+                </span>
+                <span
+                  style={{ fontSize: "13px", fontWeight: 800, color: s.color }}
+                >
+                  {s.value}
+                </span>
               </div>
             ))}
           </div>
 
           {/* Gate status */}
-          <div className="rounded-2xl p-4" style={{ background: "#fff", boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)" }}>
-            <p style={{ fontSize: "11px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 12px 0" }}>Gate Status</p>
+          <div
+            className="rounded-2xl p-4"
+            style={{
+              background: "#fff",
+              boxShadow: "0 2px 12px rgba(45, 66, 56,0.06)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "#9ca3af",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                margin: "0 0 12px 0",
+              }}
+            >
+              Gate Status
+            </p>
             {[
               { gate: "Gate 1 — Main Entry", status: "Open", color: "#22C55E" },
               { gate: "Gate 2 — North Exit", status: "Open", color: "#22C55E" },
               { gate: "Gate 3 — South", status: "Closed", color: "#9ca3af" },
             ].map((g) => (
-              <div key={g.gate} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid rgba(45, 66, 56,0.04)" }}>
-                <span style={{ fontSize: "11px", color: "#374151", fontWeight: 500 }}>{g.gate}</span>
+              <div
+                key={g.gate}
+                className="flex items-center justify-between py-2"
+                style={{
+                  borderBottom: "1px solid rgba(45, 66, 56,0.04)",
+                }}
+              >
+                <span
+                  style={{ fontSize: "11px", color: "#374151", fontWeight: 500 }}
+                >
+                  {g.gate}
+                </span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ background: g.color }} />
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: g.color }}>{g.status}</span>
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: g.color }}
+                  />
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      color: g.color,
+                    }}
+                  >
+                    {g.status}
+                  </span>
                 </div>
               </div>
             ))}

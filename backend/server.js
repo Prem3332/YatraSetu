@@ -17,6 +17,7 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/temples", require("./routes/temples"));
 app.use("/api/queues",  require("./routes/queues"));
 app.use("/api/system",  require("./routes/system"));
+app.use("/api/admin",   require("./routes/admin"));
 
 // TODO: Mount future route modules
 // app.use("/api/slots",   require("./routes/slots"));
@@ -40,6 +41,8 @@ io.on("connection", (socket) => {
     console.log(`🔌 Socket disconnected: ${socket.id}`);
   });
 });
+
+app.set("io", io);
 
 // ── Start (verify DB connection before listening) ─────────
 const PORT = process.env.PORT || 5000;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, Navigation, Accessibility } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
+import { useTemple } from "../../context/TempleContext";
 
 interface TempleMapScreenProps {
   onBack: () => void;
@@ -28,6 +29,7 @@ const zoneEmoji: Record<string, string> = {
 
 export function TempleMapScreen({ onBack }: TempleMapScreenProps) {
   const { t } = useLanguage();
+  const { selectedTemple } = useTemple();
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
   const [showAccessibility, setShowAccessibility] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(true);
@@ -80,7 +82,7 @@ export function TempleMapScreen({ onBack }: TempleMapScreenProps) {
           </button>
           <div>
             <h2 style={{ color: "#fff", fontSize: "16px", fontWeight: 700, margin: 0 }}>{t("map.title")}</h2>
-            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "11px", margin: 0 }}>{t("queue.temple")}</p>
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "11px", margin: 0 }}>{selectedTemple?.name || t("queue.temple")}</p>
           </div>
         </div>
       </div>

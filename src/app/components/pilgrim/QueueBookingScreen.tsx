@@ -5,7 +5,7 @@ import { useTemple } from "../../context/TempleContext";
 import { fetchSlotAvailability, bookDarshanSlot, SlotAvailability } from "../../lib/api";
 
 // Extracted sub-components and hooks
-import { useMonthlyTraffic } from "./QueueBooking/useMonthlyTraffic";
+import { useMonthlyTraffic, clearMonthlyTrafficCache } from "./QueueBooking/useMonthlyTraffic";
 import { CalendarMonth } from "./QueueBooking/CalendarMonth";
 import { Legend } from "./QueueBooking/Legend";
 import { SlotList } from "./QueueBooking/SlotList";
@@ -49,8 +49,8 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
   
   const [people, setPeople] = useState(2);
   const [accessibility, setAccessibility] = useState(false);
-  const [name, setName] = useState("Ramesh Patel");
-  const [phone, setPhone] = useState("+91 98765 43210");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   
   const [availableSlots, setAvailableSlots] = useState<SlotAvailability[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -106,6 +106,8 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
         phone
       });
       localStorage.setItem("yatrasetu_active_booking", result.booking.id);
+      // Invalidate traffic cache so calendar shows fresh data on next visit
+      clearMonthlyTrafficCache(selectedTemple._id);
       setBookingLoading(false);
       onConfirm(result.booking.id);
     } catch (err: any) {
@@ -132,7 +134,7 @@ export function QueueBookingScreen({ onBack, onConfirm }: QueueBookingScreenProp
           </button>
           <div style={{ flex: 1 }}>
             <h2 style={{ color: "#fff", fontSize: "16px", fontWeight: 700, margin: 0 }}>{t("queue.title")}</h2>
-            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "11px", margin: 0 }}>{t("queue.temple")}</p>
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "11px", margin: 0 }}>{selectedTemple?.name || t("queue.temple")}</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             {[1, 2].map((s) => (
